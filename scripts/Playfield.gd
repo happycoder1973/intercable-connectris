@@ -4,6 +4,8 @@ extends Node2D
 
 signal score_changed(new_score: int, level: int)
 signal game_over_triggered(final_score: int)
+signal crimp_press_started(row_index: int)
+signal crimp_press_completed(row_index: int)
 
 @export var fall_interval_start: float = 1.0
 
@@ -16,6 +18,11 @@ var _score: int = 0
 var _level: int = 1
 var _total_rows_cleared: int = 0
 var _game_over: bool = false
+var _is_animating_press: bool = false
+
+@onready var _press_overlay: Node2D = get_node_or_null("PressOverlay")
+@onready var _sfx_press: AudioStreamPlayer = get_node_or_null("SfxPress")
+@onready var _spark_particles: CPUParticles2D = get_node_or_null("SparkParticles")
 
 
 func _ready() -> void:
@@ -37,7 +44,7 @@ func _ready() -> void:
 
 
 func _process(p_delta: float) -> void:
-	if _game_over:
+	if _game_over or _is_animating_press:
 		return
 
 	handle_input()
@@ -49,7 +56,7 @@ func _process(p_delta: float) -> void:
 
 
 func _unhandled_input(p_event: InputEvent) -> void:
-	if _game_over or current_block == null:
+	if _game_over or _is_animating_press or current_block == null:
 		return
 
 	if p_event is InputEventKey and p_event.pressed:
@@ -93,7 +100,7 @@ func spawn_new_block() -> void:
 
 
 func move_block_down() -> void:
-	if current_block == null or _game_over:
+	if current_block == null or _game_over or _is_animating_press:
 		return
 
 	if grid.is_valid_position(current_block, Vector2i(0, 1)):
@@ -104,15 +111,17 @@ func move_block_down() -> void:
 		current_block.queue_free()
 		current_block = null
 
-		var cleared: int = grid.check_and_clear_rows()
-		if cleared > 0:
-			_add_score(cleared)
+		var status: Dictionary = grid.check_full_rows_status()
+		var valid_rows: Array = status["valid"]
 
-		spawn_new_block()
+		if valid_rows.size() > 0:
+			_animate_press_sequence(valid_rows)
+		else:
+			spawn_new_block()
 
 
 func move_block_horizontal(p_dir: int) -> void:
-	if current_block == null or _game_over:
+	if current_block == null or _game_over or _is_animating_press:
 		return
 
 	if grid.is_valid_position(current_block, Vector2i(p_dir, 0)):
@@ -121,7 +130,7 @@ func move_block_horizontal(p_dir: int) -> void:
 
 
 func rotate_block() -> void:
-	if current_block == null or _game_over:
+	if current_block == null or _game_over or _is_animating_press:
 		return
 
 	current_block.rotate_right()
@@ -130,7 +139,7 @@ func rotate_block() -> void:
 
 
 func hard_drop() -> void:
-	if current_block == null or _game_over:
+	if current_block == null or _game_over or _is_animating_press:
 		return
 
 	while grid.is_valid_position(current_block, Vector2i(0, 1)):
@@ -152,22 +161,73 @@ func _update_block_visual_position() -> void:
 
 
 func _add_score(p_cleared_rows: int) -> void:
-	var points: int = 0
-	match p_cleared_rows:
-		1:
-			points = 100 * _level
-		2:
-			points = 300 * _level
-		3:
-			points = 500 * _level
-		4:
-			points = 800 * _level
-		_:
-			points = p_cleared_rows * 200 * _level
-
-	_score += points
+	_score += p_cleared_rows
 	_total_rows_cleared += p_cleared_rows
 	_level = 1 + (_total_rows_cleared / 10)
 
 	update_difficulty()
 	score_changed.emit(_score, _level)
+
+
+func _animate_press_sequence(p_valid_rows: Array) -> void:
+	_is_animating_press = true
+	p_valid_rows.sort()
+
+	for row in p_valid_rows:
+		crimp_press_started.emit(row)
+
+		if _press_overlay != null:
+			_press_overlay.position.x = 0
+			_press_overlay.position.y = -Grid.CELL_SIZE
+			_press_overlay.show()
+
+		var tween := create_tween()
+		var target_y: float = row * Grid.CELL_SIZE
+
+		if _press_overlay != null:
+			(
+				tween
+				. tween_property(_press_overlay, "position:y", target_y, 0.4)
+				. set_trans(Tween.TRANS_QUAD)
+				. set_ease(Tween.EASE_OUT)
+			)
+		else:
+			tween.tween_interval(0.1)
+
+		tween.tween_callback(
+			func():
+				if _sfx_press != null:
+					_sfx_press.play()
+				if _spark_particles != null:
+					var half_w: float = (Grid.COLUMNS * Grid.CELL_SIZE) / 2.0
+					var center_y: float = target_y + Grid.CELL_SIZE / 2.0
+					_spark_particles.position = Vector2(half_w, center_y)
+					_spark_particles.restart()
+		)
+
+		tween.tween_interval(0.15)
+
+		tween.tween_callback(func(): grid.clear_row(row))
+
+		if _press_overlay != null:
+			(
+				tween
+				. tween_property(_press_overlay, "position:y", -Grid.CELL_SIZE, 0.3)
+				. set_trans(Tween.TRANS_QUAD)
+				. set_ease(Tween.EASE_IN)
+			)
+		else:
+			tween.tween_interval(0.1)
+
+		tween.tween_callback(
+			func():
+				if _press_overlay != null:
+					_press_overlay.hide()
+				crimp_press_completed.emit(row)
+		)
+
+		await tween.finished
+		_add_score(1)
+
+	_is_animating_press = false
+	spawn_new_block()

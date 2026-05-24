@@ -42,9 +42,14 @@ Um die Tests headlessly über die Konsole auszuführen, führe folgenden Befehl 
 - `test_row_clearing`: Simuliert volle Zeilen und verifiziert deren Löschung sowie das korrekte Herabfallen darüberliegender Segmente.
 - `test_powerups_clear`: Testet die Power-up-Hilfsfunktionen zum zeilen- und spaltenweisen Löschen.
 - `test_shake_grid`: Testet das Schütteln des Gitters (Kompaktierung aller Segmente nach unten unter Einfluss von Schwerkraft).
+- `test_is_row_crimp_valid`: Validiert die Crimp-Gültigkeit einer Zeile (Crimp-Lugs an den Rändern, blanke Adern dazwischen).
+- `test_check_full_rows_status`: Prüft die Identifizierung von vollen Zeilen und deren Klassifizierung in gültige (crimp-valid) und ungültige Zeilen.
 
 ### 4.3 Spielfeld-Tests (`tests/test_playfield.gd`)
 - `test_playfield_initialization`: Verifiziert die korrekte Initialisierung des Spielfelds, das Vorhandensein eines Gitters und das automatische Spawnen des ersten Blocks.
-- `test_score_progression`: Testet die Punktevergabe für 1, 4, und mehrere Reihen unter Berücksichtigung des aktuellen Levels und validiert das `score_changed` Signal.
+- `test_score_progression`: Testet die aktualisierte Punktevergabe von 1 Punkt pro gelöschter Crimp-Zeile sowie das Level-Up alle 10 Zeilen und validiert das `score_changed` Signal.
 - `test_difficulty_adjustment`: Überprüft die Anpassung des Fall-Intervalls (Schwerkraft) basierend auf dem Level und stellt das korrekte Limitieren (Clamp auf minimal 0.1s) sicher.
 - `test_block_movement`: Prüft grundlegende Spielaktionen wie das Bewegen nach unten und horizontales Verschieben des aktiven Blocks.
+- `test_invalid_rows_not_cleared_and_no_score`: Stellt sicher, dass volle Zeilen, die den Crimp-Kriterien nicht entsprechen, im Gitter verbleiben (nicht gelöscht werden) und keine Punkte vergeben.
+- `test_valid_rows_trigger_press_and_score`: Verifiziert, dass gültige Zeilen die STILO60 Crimp-Presse-Animation auslösen, gelöscht werden und Punkte vergeben.
+- `test_input_and_gravity_blocked_during_press`: Testet, dass während der laufenden Crimp-Presse-Animation alle Benutzereingaben, Fall-Timer-Updates und Blockbewegungen blockiert werden.
