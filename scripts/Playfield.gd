@@ -58,6 +58,11 @@ var _milestones_shown: Dictionary = {
 	"shield": false, "level_3": false, "level_5": false, "level_10": false
 }
 
+var _touch_start_pos: Vector2 = Vector2.ZERO
+var _touch_start_time: int = 0
+var _last_joy_axis_x: float = 0.0
+var _last_joy_axis_y: float = 0.0
+
 # Programmatische UI-Referenzen
 var _bg_rect: TextureRect
 var _level_label: Label
@@ -134,6 +139,7 @@ func _unhandled_input(p_event: InputEvent) -> void:
 	if _game_over or _is_animating_press or current_block == null:
 		return
 
+	# Keyboard Input
 	if p_event is InputEventKey and p_event.pressed:
 		match p_event.keycode:
 			KEY_LEFT, KEY_A:
@@ -147,6 +153,72 @@ func _unhandled_input(p_event: InputEvent) -> void:
 				_fall_timer = 0.0
 			KEY_SPACE:
 				hard_drop()
+
+	# Touch Input (Wischgesten & Taps)
+	elif p_event is InputEventScreenTouch:
+		if p_event.pressed:
+			_touch_start_pos = p_event.position
+			_touch_start_time = Time.get_ticks_msec()
+		else:
+			var swipe_vec = p_event.position - _touch_start_pos
+			var elapsed = Time.get_ticks_msec() - _touch_start_time
+			if swipe_vec.length() < 30 and elapsed < 300:
+				rotate_block()
+			elif swipe_vec.length() >= 50:
+				if abs(swipe_vec.x) > abs(swipe_vec.y):
+					if swipe_vec.x < 0:
+						move_block_horizontal(-1)
+					else:
+						move_block_horizontal(1)
+				else:
+					if swipe_vec.y > 0:
+						hard_drop()
+						_fall_timer = 0.0
+
+	# Gamepad Buttons Input
+	elif p_event is InputEventJoypadButton and p_event.pressed:
+		var pm = get_node_or_null("PowerUpManager")
+		match p_event.button_index:
+			JOY_BUTTON_A, JOY_BUTTON_DPAD_UP:
+				rotate_block()
+			JOY_BUTTON_DPAD_LEFT:
+				move_block_horizontal(-1)
+			JOY_BUTTON_DPAD_RIGHT:
+				move_block_horizontal(1)
+			JOY_BUTTON_DPAD_DOWN:
+				move_block_down()
+				_fall_timer = 0.0
+			JOY_BUTTON_X:
+				if pm != null:
+					pm.trigger_powerup(1)
+			JOY_BUTTON_Y:
+				if pm != null:
+					pm.trigger_powerup(2)
+			JOY_BUTTON_B:
+				if pm != null:
+					pm.trigger_powerup(3)
+			JOY_BUTTON_LEFT_SHOULDER, JOY_BUTTON_RIGHT_SHOULDER:
+				if pm != null:
+					pm.trigger_powerup(4)
+
+	# Gamepad Stick Analog Input
+	elif p_event is InputEventJoypadMotion:
+		if p_event.axis == JOY_AXIS_LEFT_X:
+			if abs(p_event.axis_value) < 0.2:
+				_last_joy_axis_x = 0.0
+			elif p_event.axis_value < -0.5 and _last_joy_axis_x >= -0.5:
+				_last_joy_axis_x = p_event.axis_value
+				move_block_horizontal(-1)
+			elif p_event.axis_value > 0.5 and _last_joy_axis_x <= 0.5:
+				_last_joy_axis_x = p_event.axis_value
+				move_block_horizontal(1)
+		elif p_event.axis == JOY_AXIS_LEFT_Y:
+			if abs(p_event.axis_value) < 0.2:
+				_last_joy_axis_y = 0.0
+			elif p_event.axis_value > 0.5 and _last_joy_axis_y <= 0.5:
+				_last_joy_axis_y = p_event.axis_value
+				move_block_down()
+				_fall_timer = 0.0
 
 
 func handle_input() -> void:
@@ -287,6 +359,7 @@ func _animate_press_sequence(p_valid_rows: Array) -> void:
 
 		tween.tween_callback(
 			func():
+				_trigger_rumble(0.4, 0.4, 0.2)
 				if _sfx_press != null:
 					_sfx_press.play()
 				if _spark_particles != null:
@@ -343,6 +416,7 @@ func is_shield_active() -> bool:
 
 
 func _trigger_camera_shake() -> void:
+	_trigger_rumble(0.6, 0.6, 0.4)
 	if _camera == null:
 		return
 
@@ -365,6 +439,7 @@ func _trigger_game_over(p_was_time_out: bool) -> void:
 	if _game_over:
 		return
 	_game_over = true
+	_trigger_rumble(0.8, 0.8, 0.5)
 	game_over_triggered.emit(_score)
 	if current_block != null:
 		current_block.queue_free()
@@ -700,3 +775,8 @@ func _is_running_in_test() -> bool:
 	if get_parent() != null and "gut" in get_parent().name.to_lower():
 		return true
 	return false
+
+
+func _trigger_rumble(p_weak: float, p_strong: float, p_duration: float) -> void:
+	if Input.get_connected_joypads().size() > 0:
+		Input.start_joy_vibration(0, p_weak, p_strong, p_duration)
