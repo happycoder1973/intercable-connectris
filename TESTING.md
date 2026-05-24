@@ -75,3 +75,18 @@ Um die Tests headlessly über die Konsole auszuführen, führe folgenden Befehl 
 - `test_powerup_effects`: Testet die konkreten Auswirkungen der Power-ups (1 bis 4) auf das Gitter/Spielfeld.
 - `test_input_handling`: Verifiziert, dass Tastendrucke (Zifferntasten 1-4) korrekte Power-up-Effekte auslösen.
 
+### 4.5 Game Over und Modi Tests (Slice 4)
+
+#### SettingsManager-Tests (`tests/test_settings_manager.gd`)
+- `test_settings_manager_defaults`: Überprüft die Standardwerte des SettingsManagers.
+- `test_save_and_load_settings`: Verifiziert das Speichern und Laden von Einstellungen über ConfigFile.
+
+#### Spielfeld-Tests (`tests/test_playfield.gd` - Erweiterung)
+- `test_expo_timer_countdown`: Testet den Timer-Countdown im EXPO-Modus und die Signalemission.
+- `test_timeout_triggers_game_over`: Stellt sicher, dass ein EXPO-Zeitablauf das Game Over auslöst.
+- `test_spawn_collision_triggers_game_over`: Testet, dass eine sofortige Kollision beim Blockspawn
+  ein Game Over auslöst (sofern kein Schild aktiv ist).
+- `test_game_over_overlay_initialization`: Prüft die korrekte Beschriftung und Funktion
+  des GameOverOverlay.
+
+
