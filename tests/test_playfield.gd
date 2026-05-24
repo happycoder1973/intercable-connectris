@@ -224,3 +224,87 @@ func test_input_and_gravity_blocked_during_press() -> void:
 	await wait_for_signal(playfield.crimp_press_completed, 2.0)
 
 	playfield.free()
+
+
+func test_shield_activation_and_decay() -> void:
+	var playfield = PlayfieldClass.new()
+	add_child(playfield)
+
+	assert_false(playfield.is_shield_active(), "Shield should be inactive initially")
+	playfield.activate_vde_shield()
+	assert_true(playfield.is_shield_active(), "Shield should be active after activation")
+	assert_eq(playfield._shield_time_left, 20.0, "Shield time left should be 20.0")
+
+	# Decay shield
+	playfield._process(5.0)
+	assert_true(playfield.is_shield_active(), "Shield should still be active")
+	assert_eq(playfield._shield_time_left, 15.0, "Shield time should decay")
+
+	playfield._process(16.0)
+	assert_false(playfield.is_shield_active(), "Shield should deactivate after 20s")
+
+	playfield.free()
+
+
+func test_shield_game_over_prevention() -> void:
+	var playfield = PlayfieldClass.new()
+	add_child(playfield)
+
+	# Put segments at the bottom so we can check if they are cleared
+	var grid = playfield.grid
+	for r in range(15, 20):
+		grid.grid_data[r][0] = SegmentClass.new(SegmentClass.Type.BARE, Color.RED)
+
+	# Put segments at spawn position to force immediate collision
+	# A spawned block has its center at column 3, row 0, 1, 2 etc.
+	# We can just fill rows 0, 1, 2 with segments
+	for r in range(3):
+		for c in range(GridClass.COLUMNS):
+			grid.grid_data[r][c] = SegmentClass.new(SegmentClass.Type.BARE, Color.RED)
+
+	# Activate shield
+	playfield.activate_vde_shield()
+
+	# Call spawn_new_block which will collide immediately
+	playfield.spawn_new_block()
+
+	# Verify Game Over was prevented and shield is consumed
+	assert_false(playfield._game_over, "Game Over should be prevented by shield")
+	assert_false(playfield.is_shield_active(), "Shield should be consumed")
+
+	# Verify bottom 5 rows are cleared (all cells should be null)
+	for r in range(15, 20):
+		for c in range(GridClass.COLUMNS):
+			assert_null(grid.grid_data[r][c], "Bottom 5 rows should be cleared")
+
+	playfield.free()
+
+
+func test_camera_shake_does_not_crash() -> void:
+	var playfield = PlayfieldClass.new()
+	add_child(playfield)
+
+	# Directly trigger camera shake (camera node is present via scene/onready)
+	# Since new() doesn't instantiate children from scene, let's create a camera
+	# manually if it's null or we can instantiate from tscn.
+	# Let's instantiate from playfield.tscn to test real scene structure.
+	playfield.free()
+
+	var scene = load("res://scenes/playfield.tscn")
+	playfield = scene.instantiate()
+	add_child(playfield)
+
+	# Check that camera is present
+	assert_not_null(playfield._camera, "Camera2D should be in playfield scene")
+	assert_not_null(playfield._shield_overlay, "ShieldOverlay should be in scene")
+	assert_not_null(playfield._sfx_laser, "SfxLaser should be in scene")
+	assert_not_null(playfield._sfx_cut, "SfxCut should be in scene")
+
+	# Trigger camera shake
+	playfield._trigger_camera_shake()
+	# The tween is active, we just check it runs without crash.
+	# We can also check shield activation visibility
+	playfield.activate_vde_shield()
+	assert_true(playfield._shield_overlay.visible, "Shield overlay visible when active")
+
+	playfield.free()
