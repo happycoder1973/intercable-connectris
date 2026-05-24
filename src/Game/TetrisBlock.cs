@@ -79,7 +79,7 @@ public partial class TetrisBlock : Node2D
 
         int rows = ShapeMatrix.GetLength(0);
         int cols = ShapeMatrix.GetLength(1);
-        int blockSize = 64;
+        int blockSize = 48;
 
         for (int r = 0; r < rows; r++)
         {
@@ -87,7 +87,7 @@ public partial class TetrisBlock : Node2D
             {
                 if (ShapeMatrix[r, c])
                 {
-                    DrawTexture(_texture, new Vector2(c * blockSize, r * blockSize), BlockColor);
+                    DrawTextureRect(_texture, new Rect2(c * blockSize, r * blockSize, blockSize, blockSize), false, BlockColor);
                 }
             }
         }

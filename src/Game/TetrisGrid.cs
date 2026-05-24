@@ -200,7 +200,7 @@ public partial class TetrisGrid : Node2D
 
     public override void _Draw()
     {
-        int blockSize = 64;
+        int blockSize = 48;
 
         // Draw grid background and border
         DrawRect(new Rect2(0, 0, Columns * blockSize, Rows * blockSize), new Color(0, 0, 0, 0.5f));
@@ -219,7 +219,7 @@ public partial class TetrisGrid : Node2D
 
                     if (tex != null)
                     {
-                        DrawTexture(tex, new Vector2(x * blockSize, y * blockSize), cell.Color);
+                        DrawTextureRect(tex, new Rect2(x * blockSize, y * blockSize, blockSize, blockSize), false, cell.Color);
                     }
                 }
             }

@@ -22,6 +22,21 @@ public partial class Playfield : Node2D
     private AudioStreamPlayer _sfxCut;
     private Label _scoreLabel;
 
+    private static readonly bool[][,] TetrominoShapes = new bool[][,]
+    {
+        new bool[,] { { false, false, false, false }, { true,  true,  true,  true }, { false, false, false, false }, { false, false, false, false } }, // I
+        new bool[,] { { true,  false, false }, { true,  true,  true }, { false, false, false } }, // J
+        new bool[,] { { false, false, true }, { true,  true,  true }, { false, false, false } }, // L
+        new bool[,] { { true, true }, { true, true } }, // O
+        new bool[,] { { false, true,  true }, { true,  true,  false }, { false, false, false } }, // S
+        new bool[,] { { false, true,  false }, { true,  true,  true }, { false, false, false } }, // T
+        new bool[,] { { true,  true,  false }, { false, true,  true }, { false, false, false } }  // Z
+    };
+
+    private static readonly Color[] TetrominoColors = new Color[]
+    {
+        Colors.Cyan, Colors.Blue, Colors.Orange, Colors.Yellow, Colors.Green, Colors.Purple, Colors.Red
+    };
 
     public override void _Ready()
     {
@@ -73,8 +88,8 @@ public partial class Playfield : Node2D
 
         if (_currentBlock != null)
         {
-            // Sync pixel position with grid
-            _currentBlock.Position = new Vector2(_currentBlock.GridPosition.X * 64, _currentBlock.GridPosition.Y * 64);
+            // Sync pixel position with grid (48px)
+            _currentBlock.Position = new Vector2(_currentBlock.GridPosition.X * 48, _currentBlock.GridPosition.Y * 48);
         }
     }
 
@@ -89,15 +104,37 @@ public partial class Playfield : Node2D
             MoveBlockHorizontal(1);
         }
 
-        if (Input.IsActionJustPressed("ui_down") || Input.IsActionJustPressed("ui_touch_down") || Input.IsActionJustPressed("ui_joypad_down"))
+        // Hard Drop
+        if (Input.IsActionJustPressed("ui_select") || Input.IsActionJustPressed("ui_accept"))
         {
-            MoveBlockDown();
+            HardDrop();
+            return;
+        }
+
+        // Soft Drop
+        if (Input.IsActionPressed("ui_down") || Input.IsActionPressed("ui_touch_down") || Input.IsActionPressed("ui_joypad_down"))
+        {
+            _fallInterval = 0.05f;
+        }
+        else
+        {
+            _fallInterval = Math.Max(0.1f, 1.0f - ((_level - 1) * 0.05f));
         }
 
         if (Input.IsActionJustPressed("ui_up") || Input.IsActionJustPressed("ui_touch_up") || Input.IsActionJustPressed("ui_joypad_up"))
         {
             RotateBlock();
         }
+    }
+
+    private void HardDrop()
+    {
+        while (_grid.IsValidPosition(_currentBlock, new Vector2I(0, 1)))
+        {
+            _currentBlock.GridPosition += new Vector2I(0, 1);
+            _score += 2;
+        }
+        MoveBlockDown(); // Trigger lock
     }
 
     private void MoveBlockHorizontal(int dir)
@@ -140,8 +177,17 @@ public partial class Playfield : Node2D
         _currentBlock.RotateRight();
         if (!_grid.IsValidPosition(_currentBlock, Vector2I.Zero))
         {
-            // Revert if invalid
-            _currentBlock.RotateLeft();
+            // Wall Kick (Basic)
+            if (_grid.IsValidPosition(_currentBlock, new Vector2I(-1, 0))) {
+                _currentBlock.GridPosition += new Vector2I(-1, 0);
+            } else if (_grid.IsValidPosition(_currentBlock, new Vector2I(1, 0))) {
+                _currentBlock.GridPosition += new Vector2I(1, 0);
+            } else if (_grid.IsValidPosition(_currentBlock, new Vector2I(0, -1))) {
+                _currentBlock.GridPosition += new Vector2I(0, -1);
+            } else {
+                // Revert if all fail
+                _currentBlock.RotateLeft();
+            }
         }
     }
 
@@ -149,14 +195,13 @@ public partial class Playfield : Node2D
     {
         _currentBlock = new TetrisBlock();
         
-        // Example: 2x2 Square (O-Block)
-        _currentBlock.ShapeMatrix = new bool[,] {
-            { true, true },
-            { true, true }
-        };
-        _currentBlock.GridPosition = new Vector2I(4, 0);
+        int shapeIndex = (int)(GD.Randi() % 7);
+        _currentBlock.ShapeMatrix = (bool[,])TetrominoShapes[shapeIndex].Clone();
+        _currentBlock.BlockColor = TetrominoColors[shapeIndex];
+
+        int cols = _currentBlock.ShapeMatrix.GetLength(1);
+        _currentBlock.GridPosition = new Vector2I((TetrisGrid.Columns - cols) / 2, 0);
         _currentBlock.SetCableState(CableState.Isolated);
-        _currentBlock.BlockColor = Colors.Red;
 
         AddChild(_currentBlock);
         
