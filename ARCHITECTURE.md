@@ -23,6 +23,7 @@ graph TD
     PressOverlay[Stilo60Press / PressOverlay.tscn]
     PowerUpManager[PowerUpManager / PowerUpManager.gd]
     ShieldOverlay[ShieldOverlay / ShieldOverlay.tscn]
+    GameOverOverlay[GameOverOverlay / GameOverOverlay.tscn]
 
     Main --> Playfield
     Main --> MainMenu
@@ -33,7 +34,11 @@ graph TD
     Playfield --> PressOverlay
     Playfield --> PowerUpManager
     Playfield --> ShieldOverlay
+    Playfield --> GameOverOverlay
 ```
+
+### Global Autoloads (Singletons)
+* **SettingsManager (`SettingsManager.gd`)**: Verwaltet spielsitzungsübergreifende Einstellungen wie Spielmodus, Rundenzeitlimits und Kiosk-Einstellungen.
 
 ### Komponenten-Zuständigkeiten:
 1. **MainRoot (`main.tscn`)**: 
@@ -45,24 +50,26 @@ graph TD
    * Verarbeitet Benutzereingaben (Links, Rechts, Soft/Hard Drop, Rotation).
    * Spawnt neue Blöcke und steuert den Lebenszyklus des aktiven Blocks.
    * Koordiniert die STILO60-Presse-Animation und blockiert Eingaben während des Pressvorgangs.
+   * **Neu in Slice 4**: Verwaltet den EXPO-Rundentimer und stoppt das Spiel bei Zeitablauf.
 3. **Grid (`Grid.gd` / Node2D)**:
    * Verwaltet das 2D-Gitter (10 Spalten x 20 Zeilen).
    * Führt Kollisionsprüfungen (`is_valid_position`) für den fallenden Block durch.
    * Speichert feste Blöcke (`lock_block`) und prüft Zeilen.
    * Führt die *Workflow-Verpressungsprüfung* durch und löscht selektiv nur regelkonforme Zeilen.
-   * **Neu in Slice 3**: Führt Grid-Manipulationen für Power-ups aus (Segmente abisolieren, Zeilen von unten löschen, Slick-Cutter-Reihe finden).
+   * Führt Gitter-Manipulationen für Power-ups aus.
 4. **Block (`Block.gd` / Node2D)**:
-   * Repräsentiert das fallende Tetromino (7 Standardformen: I, J, L, O, S, T, Z).
-   * Verwaltet seine eigene Gitterposition, Farbe und Rotationsmatrizen.
+   * Repräsentiert das fallende Tetromino (7 Standardformen).
    * Jede Zelle des Blocks besitzt ein eigenes Segment mit einem Zustand (`Segment.Type`).
 5. **PressOverlay (`PressOverlay.tscn` / Node2D)**:
    * Repräsentiert visuell den Kopf der STILO60-Presse.
-   * Fährt horizontal zentriert über dem Grid herunter, um die Verpressung visuell darzustellen.
+   * Fährt horizontal zentriert über dem Gitter herunter, um die Verpressung visuell darzustellen.
 6. **PowerUpManager (`PowerUpManager.gd` / Node)**:
-   * **Neu in Slice 3**: Verwaltet die Cooldowns (20 Sekunden) für alle vier Power-ups.
+   * Verwaltet die Cooldowns (20 Sekunden) für alle vier Power-ups.
    * Verarbeitet die Tastenkombinationen (Tasten 1, 2, 3, 4) und Signale der UI-Buttons.
 7. **ShieldOverlay (`ShieldOverlay.tscn` / Panel)**:
-   * **Neu in Slice 3**: Stellt ein leuchtendes Schild-Overlay (Cyan) um das Spielfeld dar, solange das VDE-Schutzschild aktiv ist.
+   * Stellt ein leuchtendes Schild-Overlay (Cyan) um das Spielfeld dar, solange das VDE-Schutzschild aktiv ist.
+8. **GameOverOverlay (`GameOverOverlay.tscn` / Panel)**:
+   * **Neu in Slice 4**: Zeigt nach Spielende (entweder durch Grid-Überlauf oder Zeitablauf) ein animiertes Pop-up mit Score und Level an und leitet den Spieler zur Highscore-Eingabe weiter.
 
 ---
 
@@ -146,47 +153,239 @@ func check_full_rows_status() -> Dictionary:
 func clear_row(p_row_index: int) -> void:
 	pass
 
-# --- NEU IN SLICE 3: POWER-UP GRID AKTIONEN ---
-
-# AMX-Laser: Transformiert alle ISOLATED Segmente im Grid zu BARE
 func strip_all_isolated_segments() -> void:
-	for r in range(ROWS):
-		for c in range(COLUMNS):
-			if grid_data[r][c] != null and grid_data[r][c].type == Segment.Type.ISOLATED:
-				grid_data[r][c].type = Segment.Type.BARE
-	queue_redraw()
+	pass
 
-# STILO60-Beben & VDE-Schutzschild: Löscht die untersten N Zeilen des Gitters
 func clear_bottom_rows(p_count: int) -> void:
-	var rows_to_remove: int = min(p_count, ROWS)
-	for i in range(rows_to_remove):
-		# Löscht die letzte Reihe (Index 19)
-		grid_data.remove_at(ROWS - 1)
-		# Fügt oben eine neue leere Reihe ein
-		var new_row: Array = []
-		new_row.resize(COLUMNS)
-		new_row.fill(null)
-		grid_data.insert(0, new_row)
-	queue_redraw()
+	pass
 
-# Slick-Cutter: Löscht die unterste belegte, ungültige Reihe (oder falls keine da, die unterste belegte)
 func clear_slick_cutter_target() -> void:
-	# 1. Suche nach der untersten vollen, aber ungültigen Reihe (von unten nach oben)
-	var status: Dictionary = check_full_rows_status()
-	var invalid_rows: Array = status["invalid"]
-	if invalid_rows.size() > 0:
-		invalid_rows.sort()
-		var target_row: int = invalid_rows.back() # Die unterste ungültige Zeile
-		clear_row(target_row)
+	pass
+```
+
+### 2.4 Playfield.gd (Klasse: `Playfield`)
+```gdscript
+class_name Playfield
+extends Node2D
+
+signal score_changed(new_score: int, level: int)
+signal timer_updated(time_left: float)
+signal game_over_triggered(final_score: int, level: int, was_time_out: bool)
+signal crimp_press_started(row_index: int)
+signal crimp_press_completed(row_index: int)
+signal shield_state_changed(active: bool, time_left: float)
+signal camera_shake_triggered()
+
+@export var fall_interval_start: float = 1.0
+
+var grid: Grid
+var current_block: Block
+
+var _fall_timer: float = 0.0
+var _fall_interval: float = 1.0
+var _score: int = 0
+var _level: int = 1
+var _total_rows_cleared: int = 0
+var _game_over: bool = false
+var _is_animating_press: bool = false
+
+# --- NEU IN SLICE 4: EXPO TIMER ---
+var _time_left: float = 180.0
+
+@onready var _press_overlay: Node2D = $PressOverlay
+@onready var _sfx_press: AudioStreamPlayer = $SfxPress
+@onready var _spark_particles: CPUParticles2D = $SparkParticles
+@onready var _sfx_laser: AudioStreamPlayer = $SfxLaser
+@onready var _sfx_cut: AudioStreamPlayer = $SfxCut
+@onready var _camera: Camera2D = $Camera2D
+@onready var _shield_overlay: Control = $ShieldOverlay
+
+var _shield_time_left: float = 0.0
+
+func _ready() -> void:
+	# Timer für EXPO-Modus initialisieren
+	if SettingsManager.current_mode == SettingsManager.GameMode.EXPO:
+		_time_left = SettingsManager.expo_round_duration
+		timer_updated.emit(_time_left)
+	else:
+		_time_left = 0.0
+
+func _process(p_delta: float) -> void:
+	if _game_over or _is_animating_press:
 		return
 		
-	# 2. Wenn keine volle ungültige vorhanden, suche die unterste belegte Zeile (mind. 1 Zelle belegt)
-	for r in range(ROWS - 1, -1, -1):
-		var has_data: bool = false
-		for c in range(COLUMNS):
-			if grid_data[r][c] != null:
-				has_data = true
-				break
-		if has_data:
-			clear_row(r)
+	# Timer im EXPO-Modus herunterzählen
+	if SettingsManager.current_mode == SettingsManager.GameMode.EXPO:
+		_time_left -= p_delta
+		if _time_left <= 0.0:
+			_time_left = 0.0
+			timer_updated.emit(_time_left)
+			_trigger_game_over(true)
 			return
+		timer_updated.emit(_time_left)
+
+	# VDE-Schutzschild Timer aktualisieren
+	if _shield_time_left > 0.0:
+		_shield_time_left -= p_delta
+		shield_state_changed.emit(true, _shield_time_left)
+		if _shield_time_left <= 0.0:
+			_shield_time_left = 0.0
+			_shield_overlay.hide()
+			shield_state_changed.emit(false, 0.0)
+
+	# Normaler Loop...
+
+func _trigger_game_over(p_was_time_out: bool) -> void:
+	_game_over = true
+	if current_block != null:
+		current_block.queue_free()
+		current_block = null
+	game_over_triggered.emit(_score, _level, p_was_time_out)
+
+func is_shield_active() -> bool:
+	return _shield_time_left > 0.0
+
+func activate_vde_shield() -> void:
+	pass
+
+func spawn_new_block() -> void:
+	# Falls kein Platz mehr beim Spawn vorhanden ist:
+	# ... (Schild-Prüfung) ...
+	# falls kein Schild aktiv:
+	_trigger_game_over(false)
+
+func _trigger_camera_shake() -> void:
+	pass
+```
+
+### 2.5 PowerUpManager.gd (Klasse: `PowerUpManager`)
+```gdscript
+class_name PowerUpManager
+extends Node
+# ... (Siehe Slice 3) ...
+```
+
+### 2.6 SettingsManager.gd (Autoload Singleton: `SettingsManager`)
+```gdscript
+# SettingsManager.gd
+extends Node
+
+enum GameMode {
+	CLASSIC, # Endlosmodus
+	EXPO     # Messe-Modus mit Zeitbegrenzung
+}
+
+var current_mode: GameMode = GameMode.CLASSIC
+var expo_round_duration: float = 180.0 # 3 Minuten Standard
+var is_kiosk_mode: bool = true
+var is_sound_enabled: bool = true
+
+func _ready() -> void:
+	load_settings()
+
+func load_settings() -> void:
+	# Lädt Einstellungen aus einer lokalen Konfigurationsdatei (user://settings.cfg)
+	pass
+
+func save_settings() -> void:
+	# Speichert Einstellungen lokal ab
+	pass
+```
+
+### 2.7 GameOverOverlay.gd (Klasse: `GameOverOverlay`)
+```gdscript
+class_name GameOverOverlay
+extends Control
+
+signal name_input_requested()
+
+@onready var _title_label: Label = $Panel/VBoxContainer/TitleLabel
+@onready var _score_label: Label = $Panel/VBoxContainer/ScoreLabel
+@onready var _level_label: Label = $Panel/VBoxContainer/LevelLabel
+@onready var _continue_button: Button = $Panel/VBoxContainer/ContinueButton
+
+func initialize(p_score: int, p_level: int, p_was_time_out: bool) -> void:
+	_title_label.text = "ZEIT ABGELAUFEN!" if p_was_time_out else "GAME OVER"
+	_score_label.text = "Erreichte Punkte: %d" % p_score
+	_level_label.text = "Level: %d" % p_level
+
+func _on_ContinueButton_pressed() -> void:
+	name_input_requested.emit()
+	queue_free()
+```
+
+---
+
+## 3. Datenfluss & State Machine (Slice 4)
+
+### 3.4 Spielmodus-Datenfluss (EXPO vs. CLASSIC)
+```mermaid
+graph TD
+    Start[Spiel startet]
+    CheckMode{Modus?}
+    Classic[CLASSIC Modus]
+    Expo[EXPO Modus]
+    ExpoInit[Timer = 180s]
+    Loop[Standard Game Loop]
+    BlockSpawn[Neuer Block]
+    BlockFit{Block kollidiert?}
+    TimeExpired{Timer == 0s?}
+    GameOverConfirm[Spiel beenden]
+    GameOverPanel[Zeige GameOverOverlay]
+
+    Start --> CheckMode
+    CheckMode -- CLASSIC --> Classic
+    CheckMode -- EXPO --> Expo
+    Classic --> Loop
+    Expo --> ExpoInit --> Loop
+    Loop --> BlockSpawn
+    BlockSpawn --> BoxFit
+    BoxFit -- Ja (kein Schild) --> GameOverConfirm
+    BoxFit -- Nein --> Loop
+    Loop -- Rundenzeit zählt runter --> TimeExpired
+    TimeExpired -- Ja --> GameOverConfirm
+    TimeExpired -- Nein --> Loop
+    GameOverConfirm --> GameOverPanel
+```
+
+### 3.5 Game-Over- und Highscore-Übergangs-Workflow
+```mermaid
+sequenceDiagram
+    participant P as Playfield
+    participant GO as GameOverOverlay
+    participant K as KeyboardOverlay
+    participant M as MainRoot
+
+    Note over P: Game Over / Zeitablauf ausgelöst
+    P->>GO: Instantiate & initialize(score, level, was_time_out)
+    P->>P: Pausiere physikalische Aktionen
+    GO-->>Player: Zeigt Punkte & GameOver-Grund an
+    Player->>GO: Klickt 'Weiter'
+    GO->>P: Emit name_input_requested
+    P->>K: Instantiate Keyboard & verbinde initials_entered
+    K-->>Player: Blendet Bildschirmtastatur ein
+    Player->>K: Gibt 3 Initialen ein & drückt OK
+    K->>P: Emit initials_entered(initials)
+    P->>P: Speichert Highscore in SQLite DB
+    P->>M: Szene wechseln zu MainMenu
+```
+
+---
+
+## 4. SQLite Datenbank-Schema
+
+Für die Highscore-Tabelle wird SQLite verwendet. Dies wird in GDScript über einen nativen C++-Wrapper oder ein GDExtension-Plugin angebunden.
+
+### Tabelle: `highscores`
+```sql
+CREATE TABLE IF NOT EXISTS highscores (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    initials TEXT NOT NULL CHECK(length(initials) <= 3),
+    score INTEGER NOT NULL,
+    level INTEGER NOT NULL,
+    date TEXT NOT NULL
+);
+```
+
+* **Index**: Ein Index auf `score DESC, date ASC` optimiert die Abfrage der Top-10 Bestenliste.
+* **Date**: Das Datum wird im standardisierten ISO-8601 UTC-Format (`YYYY-MM-DDTHH:MM:SSZ`) als Text gespeichert.
