@@ -53,3 +53,25 @@ Um die Tests headlessly über die Konsole auszuführen, führe folgenden Befehl 
 - `test_invalid_rows_not_cleared_and_no_score`: Stellt sicher, dass volle Zeilen, die den Crimp-Kriterien nicht entsprechen, im Gitter verbleiben (nicht gelöscht werden) und keine Punkte vergeben.
 - `test_valid_rows_trigger_press_and_score`: Verifiziert, dass gültige Zeilen die STILO60 Crimp-Presse-Animation auslösen, gelöscht werden und Punkte vergeben.
 - `test_input_and_gravity_blocked_during_press`: Testet, dass während der laufenden Crimp-Presse-Animation alle Benutzereingaben, Fall-Timer-Updates und Blockbewegungen blockiert werden.
+
+### 4.4 Power-up- und VDE-Shield-Tests (Slice 3)
+
+#### Gitter-Tests (`tests/test_grid.gd`)
+- `test_strip_all_isolated_segments`: Verifiziert das Umwandeln isolierter Segmente in nackte Adern.
+- `test_clear_bottom_rows`: Testet das Entfernen von X Bodenzeilen und Nachrücken der oberen Zeilen.
+- `test_clear_slick_cutter_target`: Prüft das gezielte Löschen der untersten unvollständigen/ungültigen
+  vollen Zeile oder der untersten belegten Zeile.
+
+#### Spielfeld-Tests (`tests/test_playfield.gd`)
+- `test_shield_activation_and_decay`: Verifiziert die Aktivierung des VDE-Shields und das zeitliche Abklingen.
+- `test_shield_game_over_prevention`: Testet das Abfangen von Game-Over-Kollisionen bei aktivem Schild,
+  wobei der Schild verbraucht wird, 5 Bodenzeilen gelöscht werden und das Spiel weiterläuft.
+- `test_camera_shake_does_not_crash`: Stellt sicher, dass das Triggern des Camera-Shakes fehlerfrei
+  durchläuft und alle Nodes in der Szene (`ShieldOverlay`, `Camera2D`, etc.) geladen sind.
+
+#### PowerUpManager-Tests (`tests/test_powerup_manager.gd`)
+- `test_cooldown_mechanics`: Überprüft die 20-sekündigen Cooldown-Intervalle, deren Reduktion
+  über die Zeit und die Signalübermittlung.
+- `test_powerup_effects`: Testet die konkreten Auswirkungen der Power-ups (1 bis 4) auf das Gitter/Spielfeld.
+- `test_input_handling`: Verifiziert, dass Tastendrucke (Zifferntasten 1-4) korrekte Power-up-Effekte auslösen.
+

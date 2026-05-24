@@ -19,10 +19,15 @@ var _level: int = 1
 var _total_rows_cleared: int = 0
 var _game_over: bool = false
 var _is_animating_press: bool = false
+var _shield_time_left: float = 0.0
 
 @onready var _press_overlay: Node2D = get_node_or_null("PressOverlay")
 @onready var _sfx_press: AudioStreamPlayer = get_node_or_null("SfxPress")
 @onready var _spark_particles: CPUParticles2D = get_node_or_null("SparkParticles")
+@onready var _camera: Camera2D = get_node_or_null("Camera2D")
+@onready var _shield_overlay: Panel = get_node_or_null("ShieldOverlay")
+@onready var _sfx_laser: AudioStreamPlayer = get_node_or_null("SfxLaser")
+@onready var _sfx_cut: AudioStreamPlayer = get_node_or_null("SfxCut")
 
 
 func _ready() -> void:
@@ -44,6 +49,11 @@ func _ready() -> void:
 
 
 func _process(p_delta: float) -> void:
+	if _shield_time_left > 0.0:
+		_shield_time_left = max(0.0, _shield_time_left - p_delta)
+		if _shield_overlay != null:
+			_shield_overlay.visible = _shield_time_left > 0.0
+
 	if _game_over or _is_animating_press:
 		return
 
@@ -93,10 +103,20 @@ func spawn_new_block() -> void:
 
 	# Auf sofortige Kollision prüfen (Game Over)
 	if not grid.is_valid_position(current_block, Vector2i.ZERO):
-		_game_over = true
-		game_over_triggered.emit(_score)
-		current_block.queue_free()
-		current_block = null
+		if is_shield_active():
+			_shield_time_left = 0.0
+			if _shield_overlay != null:
+				_shield_overlay.visible = false
+			grid.clear_bottom_rows(5)
+			_trigger_camera_shake()
+			if _sfx_press != null:
+				_sfx_press.play()
+			_update_block_visual_position()
+		else:
+			_game_over = true
+			game_over_triggered.emit(_score)
+			current_block.queue_free()
+			current_block = null
 
 
 func move_block_down() -> void:
@@ -231,3 +251,32 @@ func _animate_press_sequence(p_valid_rows: Array) -> void:
 
 	_is_animating_press = false
 	spawn_new_block()
+
+
+func activate_vde_shield() -> void:
+	_shield_time_left = 20.0
+	if _shield_overlay != null:
+		_shield_overlay.visible = true
+
+
+func is_shield_active() -> bool:
+	return _shield_time_left > 0.0
+
+
+func _trigger_camera_shake() -> void:
+	if _camera == null:
+		return
+
+	var tween = create_tween()
+	var shake_strength: float = 15.0
+	var step_time: float = 0.03
+
+	for i in range(10):
+		var random_offset = Vector2(
+			randf_range(-shake_strength, shake_strength),
+			randf_range(-shake_strength, shake_strength)
+		)
+		tween.tween_property(_camera, "offset", random_offset, step_time)
+		shake_strength *= 0.9
+
+	tween.tween_property(_camera, "offset", Vector2.ZERO, step_time)

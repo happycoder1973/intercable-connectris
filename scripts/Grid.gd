@@ -191,3 +191,42 @@ func shake_grid() -> void:
 		for r in range(col_segments.size()):
 			grid_data[null_count + r][c] = col_segments[r]
 	queue_redraw()
+
+
+func strip_all_isolated_segments() -> void:
+	for r in range(ROWS):
+		for c in range(COLUMNS):
+			if grid_data[r][c] != null and grid_data[r][c].type == Segment.Type.ISOLATED:
+				grid_data[r][c].type = Segment.Type.BARE
+	queue_redraw()
+
+
+func clear_bottom_rows(p_count: int) -> void:
+	var rows_to_remove: int = min(p_count, ROWS)
+	for i in range(rows_to_remove):
+		grid_data.remove_at(ROWS - 1)
+		var new_row: Array = []
+		new_row.resize(COLUMNS)
+		new_row.fill(null)
+		grid_data.insert(0, new_row)
+	queue_redraw()
+
+
+func clear_slick_cutter_target() -> void:
+	var status: Dictionary = check_full_rows_status()
+	var invalid_rows: Array = status["invalid"]
+	if invalid_rows.size() > 0:
+		invalid_rows.sort()
+		var target_row: int = invalid_rows.back()
+		clear_row(target_row)
+		return
+
+	for r in range(ROWS - 1, -1, -1):
+		var has_data: bool = false
+		for c in range(COLUMNS):
+			if grid_data[r][c] != null:
+				has_data = true
+				break
+		if has_data:
+			clear_row(r)
+			return

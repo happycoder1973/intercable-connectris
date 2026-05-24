@@ -4,6 +4,9 @@
 [ext_resource type="Script" path="res://scripts/Grid.gd" id="2_grid"]
 [ext_resource type="Script" path="res://scripts/PressOverlay.gd" id="3_presse"]
 [ext_resource type="AudioStream" path="res://assets/audio/pressen.wav" id="4_press_wav"]
+[ext_resource type="Script" path="res://scripts/PowerUpManager.gd" id="5_powerup"]
+[ext_resource type="AudioStream" path="res://assets/audio/laser_zischen.wav" id="6_laser_wav"]
+[ext_resource type="AudioStream" path="res://assets/audio/schneiden.wav" id="7_cut_wav"]
 
 [node name="Playfield" type="Node2D"]
 script = ExtResource("1_playfield")
@@ -30,3 +33,20 @@ gravity = Vector2(0, 200)
 initial_velocity_min = 100.0
 initial_velocity_max = 200.0
 color = Color(1, 0.733333, 0.2, 1)
+
+[node name="Camera2D" type="Camera2D" parent="."]
+anchor_mode = 0
+
+[node name="PowerUpManager" type="Node" parent="."]
+script = ExtResource("5_powerup")
+
+[node name="ShieldOverlay" type="Panel" parent="."]
+visible = false
+offset_right = 480.0
+offset_bottom = 960.0
+
+[node name="SfxLaser" type="AudioStreamPlayer" parent="."]
+stream = ExtResource("6_laser_wav")
+
+[node name="SfxCut" type="AudioStreamPlayer" parent="."]
+stream = ExtResource("7_cut_wav")

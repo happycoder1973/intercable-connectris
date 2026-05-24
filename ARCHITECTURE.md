@@ -21,6 +21,8 @@ graph TD
     MainMenu[MainMenu / main_menu.tscn]
     Keyboard[Keyboard / keyboard.tscn]
     PressOverlay[Stilo60Press / PressOverlay.tscn]
+    PowerUpManager[PowerUpManager / PowerUpManager.gd]
+    ShieldOverlay[ShieldOverlay / ShieldOverlay.tscn]
 
     Main --> Playfield
     Main --> MainMenu
@@ -29,6 +31,8 @@ graph TD
     Playfield --> UI
     Playfield --> Keyboard
     Playfield --> PressOverlay
+    Playfield --> PowerUpManager
+    Playfield --> ShieldOverlay
 ```
 
 ### Komponenten-Zuständigkeiten:
@@ -40,19 +44,25 @@ graph TD
    * Spiel-Schleife (Game Loop), Fall-Geschwindigkeit (Gravity Timer) und Punkteberechnung.
    * Verarbeitet Benutzereingaben (Links, Rechts, Soft/Hard Drop, Rotation).
    * Spawnt neue Blöcke und steuert den Lebenszyklus des aktiven Blocks.
-   * **Neu in Slice 2**: Koordiniert die STILO60-Presse-Animation und blockiert Eingaben während des Pressvorgangs.
+   * Koordiniert die STILO60-Presse-Animation und blockiert Eingaben während des Pressvorgangs.
 3. **Grid (`Grid.gd` / Node2D)**:
    * Verwaltet das 2D-Gitter (10 Spalten x 20 Zeilen).
    * Führt Kollisionsprüfungen (`is_valid_position`) für den fallenden Block durch.
    * Speichert feste Blöcke (`lock_block`) und prüft Zeilen.
-   * **Neu in Slice 2**: Führt die *Workflow-Verpressungsprüfung* durch und löscht selektiv nur regelkonforme Zeilen.
+   * Führt die *Workflow-Verpressungsprüfung* durch und löscht selektiv nur regelkonforme Zeilen.
+   * **Neu in Slice 3**: Führt Grid-Manipulationen für Power-ups aus (Segmente abisolieren, Zeilen von unten löschen, Slick-Cutter-Reihe finden).
 4. **Block (`Block.gd` / Node2D)**:
    * Repräsentiert das fallende Tetromino (7 Standardformen: I, J, L, O, S, T, Z).
    * Verwaltet seine eigene Gitterposition, Farbe und Rotationsmatrizen.
    * Jede Zelle des Blocks besitzt ein eigenes Segment mit einem Zustand (`Segment.Type`).
 5. **PressOverlay (`PressOverlay.tscn` / Node2D)**:
-   * **Neu in Slice 2**: Repräsentiert visuell den Kopf der STILO60-Presse.
+   * Repräsentiert visuell den Kopf der STILO60-Presse.
    * Fährt horizontal zentriert über dem Grid herunter, um die Verpressung visuell darzustellen.
+6. **PowerUpManager (`PowerUpManager.gd` / Node)**:
+   * **Neu in Slice 3**: Verwaltet die Cooldowns (20 Sekunden) für alle vier Power-ups.
+   * Verarbeitet die Tastenkombinationen (Tasten 1, 2, 3, 4) und Signale der UI-Buttons.
+7. **ShieldOverlay (`ShieldOverlay.tscn` / Panel)**:
+   * **Neu in Slice 3**: Stellt ein leuchtendes Schild-Overlay (Cyan) um das Spielfeld dar, solange das VDE-Schutzschild aktiv ist.
 
 ---
 
@@ -127,183 +137,56 @@ func is_valid_position(block: Block, offset: Vector2i) -> bool:
 func lock_block(block: Block) -> void:
 	pass
 
-# --- NEU IN SLICE 2: VERPRESSUNGSPRÜFUNG ---
-
-# Prüft, ob eine Zeile voll ist UND dem Connectris-Kabel-Workflow entspricht:
-# - Spalte 0 und Spalte 9 müssen Segment.Type.CRIMP_LUG sein (Kabelschuh an den Enden)
-# - Spalte 1 bis Spalte 8 müssen Segment.Type.BARE sein (abisoliertes Kabel dazwischen)
 func is_row_crimp_valid(p_row_index: int) -> bool:
-	# 1. Prüfen, ob die Zeile überhaupt vollständig gefüllt ist
-	for c in range(COLUMNS):
-		if grid_data[p_row_index][c] == null:
-			return false
-			
-	# 2. Ränder prüfen (müssen CRIMP_LUG sein)
-	if grid_data[p_row_index][0].type != Segment.Type.CRIMP_LUG:
-		return false
-	if grid_data[p_row_index][COLUMNS - 1].type != Segment.Type.CRIMP_LUG:
-		return false
-		
-	# 3. Inneres prüfen (muss BARE sein)
-	for c in range(1, COLUMNS - 1):
-		if grid_data[p_row_index][c].type != Segment.Type.BARE:
-			return false
-			
 	return true
 
-# Findet alle VOLLEN Zeilen und teilt sie auf in:
-# - Crimp-gültige Zeilen (werden gelöscht und geben Punkte)
-# - Crimp-ungültige Zeilen (bleiben liegen und blockieren)
-# Gibt ein Dictionary zurück: {"valid": Array[int], "invalid": Array[int]}
 func check_full_rows_status() -> Dictionary:
-	var valid_rows: Array[int] = []
-	var invalid_rows: Array[int] = []
-	
-	for r in range(ROWS):
-		var is_full: bool = true
-		for c in range(COLUMNS):
-			if grid_data[r][c] == null:
-				is_full = false
-				break
-		if is_full:
-			if is_row_crimp_valid(r):
-				valid_rows.append(r)
-			else:
-				invalid_rows.append(r)
-				
-	return {"valid": valid_rows, "invalid": invalid_rows}
+	return {"valid": [], "invalid": []}
 
-# Löscht eine spezifische Reihe und schiebt alle darüberliegenden Zeilen nach unten
 func clear_row(p_row_index: int) -> void:
 	pass
 
-# Schiebt Spalten/Gitter compact nach unten (Schwerkraft-Kompaktierung bei Beben)
-func shake_grid() -> void:
-	pass
-```
+# --- NEU IN SLICE 3: POWER-UP GRID AKTIONEN ---
 
-### 2.4 Playfield.gd (Klasse: `Playfield`)
-```gdscript
-class_name Playfield
-extends Node2D
+# AMX-Laser: Transformiert alle ISOLATED Segmente im Grid zu BARE
+func strip_all_isolated_segments() -> void:
+	for r in range(ROWS):
+		for c in range(COLUMNS):
+			if grid_data[r][c] != null and grid_data[r][c].type == Segment.Type.ISOLATED:
+				grid_data[r][c].type = Segment.Type.BARE
+	queue_redraw()
 
-signal score_changed(new_score: int, level: int)
-signal game_over_triggered(final_score: int)
-signal crimp_press_started(row_index: int)
-signal crimp_press_completed(row_index: int)
+# STILO60-Beben & VDE-Schutzschild: Löscht die untersten N Zeilen des Gitters
+func clear_bottom_rows(p_count: int) -> void:
+	var rows_to_remove: int = min(p_count, ROWS)
+	for i in range(rows_to_remove):
+		# Löscht die letzte Reihe (Index 19)
+		grid_data.remove_at(ROWS - 1)
+		# Fügt oben eine neue leere Reihe ein
+		var new_row: Array = []
+		new_row.resize(COLUMNS)
+		new_row.fill(null)
+		grid_data.insert(0, new_row)
+	queue_redraw()
 
-@export var fall_interval_start: float = 1.0
-
-var grid: Grid
-var current_block: Block
-
-var _fall_timer: float = 0.0
-var _fall_interval: float = 1.0
-var _score: int = 0
-var _level: int = 1
-var _total_rows_cleared: int = 0
-var _game_over: bool = false
-
-# --- NEU IN SLICE 2: STILO60 PRESSE & ANIMATION ---
-var _is_animating_press: bool = false
-@onready var _press_overlay: Node2D = $PressOverlay
-@onready var _sfx_press: AudioStreamPlayer = $SfxPress
-@onready var _spark_particles: CPUParticles2D = $SparkParticles
-
-func _ready() -> void:
-	pass
-
-func _process(p_delta: float) -> void:
-	# Während der Press-Animation wird der Falltimer pausiert!
-	if _game_over or _is_animating_press:
+# Slick-Cutter: Löscht die unterste belegte, ungültige Reihe (oder falls keine da, die unterste belegte)
+func clear_slick_cutter_target() -> void:
+	# 1. Suche nach der untersten vollen, aber ungültigen Reihe (von unten nach oben)
+	var status: Dictionary = check_full_rows_status()
+	var invalid_rows: Array = status["invalid"]
+	if invalid_rows.size() > 0:
+		invalid_rows.sort()
+		var target_row: int = invalid_rows.back() # Die unterste ungültige Zeile
+		clear_row(target_row)
 		return
-	# Normaler Loop...
-	pass
-
-func _unhandled_input(p_event: InputEvent) -> void:
-	# Während der Press-Animation werden Spielereingaben blockiert!
-	if _game_over or _is_animating_press or current_block == null:
-		return
-	# Normales Input-Handling...
-	pass
-
-func move_block_down() -> void:
-	if current_block == null or _game_over or _is_animating_press:
-		return
-
-	if grid.is_valid_position(current_block, Vector2i(0, 1)):
-		current_block.grid_position.y += 1
-		_update_block_visual_position()
-	else:
-		grid.lock_block(current_block)
-		current_block.queue_free()
-		current_block = null
-
-		# Status aller Zeilen prüfen
-		var status: Dictionary = grid.check_full_rows_status()
-		var valid_rows: Array = status["valid"]
 		
-		if valid_rows.size() > 0:
-			# Starte Animationssequenz für die korrekten Reihen
-			_animate_press_sequence(valid_rows)
-		else:
-			# Keine gültigen Reihen -> Sofort nächster Block
-			spawn_new_block()
-
-# Sequenzierte Abarbeitung aller gültigen Zeilen von oben nach unten
-func _animate_press_sequence(p_valid_rows: Array) -> void:
-	_is_animating_press = true
-	# Sortieren, damit wir von oben nach unten (oder umgekehrt) pressen
-	p_valid_rows.sort()
-	
-	for row in p_valid_rows:
-		crimp_press_started.emit(row)
-		
-		# Visuelle Positionierung der Presse vorbereiten (startet über dem Spielfeld)
-		_press_overlay.position.x = 0
-		_press_overlay.position.y = -Grid.CELL_SIZE
-		_press_overlay.show()
-		
-		# Tween für Abwärtsbewegung erstellen
-		var tween := create_tween()
-		var target_y: float = row * Grid.CELL_SIZE
-		
-		# 1. Presse fährt auf die Zielzeile herunter (Dauer: ca. 0.4 Sekunden)
-		tween.tween_property(_press_overlay, "position:y", target_y, 0.4)\
-			.set_trans(Tween.TRANS_QUAD).set_ease(Tween.EASE_OUT)
-			
-		# 2. Aufprall / Pressvorgang triggern
-		tween.tween_callback(func():
-			_sfx_press.play() # Spielt pressen.wav ab
-			_spark_particles.position = Vector2((Grid.COLUMNS * Grid.CELL_SIZE) / 2.0, target_y + Grid.CELL_SIZE / 2.0)
-			_spark_particles.restart() # Partikel-Burst
-			# Optional: Viewport-Shake
-		)
-		
-		# 3. Kurze Verzögerung für den visuellen Effekt (Dauer: 0.15 Sekunden)
-		tween.tween_interval(0.15)
-		
-		# 4. Reihe im Grid löschen
-		tween.tween_callback(func():
-			grid.clear_row(row)
-		)
-		
-		# 5. Presse fährt wieder hoch (Dauer: ca. 0.3 Sekunden)
-		tween.tween_property(_press_overlay, "position:y", -Grid.CELL_SIZE, 0.3)\
-			.set_trans(Tween.TRANS_QUAD).set_ease(Tween.EASE_IN)
-			
-		# 6. Animation für diese Reihe abschließen
-		tween.tween_callback(func():
-			_press_overlay.hide()
-			crimp_press_completed.emit(row)
-		)
-		
-		# Warten, bis dieser Tween vollständig beendet ist, bevor der nächste startet
-		await tween.finished
-		
-		# Punkte aufaddieren und Level anpassen
-		_add_score(1)
-	
-	# Status beenden & neuen Block spawnen
-	_is_animating_press = false
-	spawn_new_block()
+	# 2. Wenn keine volle ungültige vorhanden, suche die unterste belegte Zeile (mind. 1 Zelle belegt)
+	for r in range(ROWS - 1, -1, -1):
+		var has_data: bool = false
+		for c in range(COLUMNS):
+			if grid_data[r][c] != null:
+				has_data = true
+				break
+		if has_data:
+			clear_row(r)
+			return

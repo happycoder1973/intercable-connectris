@@ -220,3 +220,86 @@ func test_check_full_rows_status() -> void:
 	assert_eq(status["invalid"][0], 19, "Invalid row index should be 19")
 
 	grid.free()
+
+
+func test_strip_all_isolated_segments() -> void:
+	var grid = GridClass.new()
+	grid._init_grid()
+
+	grid.grid_data[10][2] = SegmentClass.new(SegmentClass.Type.ISOLATED, Color.RED)
+	grid.grid_data[11][3] = SegmentClass.new(SegmentClass.Type.BARE, Color.BLUE)
+
+	grid.strip_all_isolated_segments()
+
+	assert_eq(
+		grid.grid_data[10][2].type, SegmentClass.Type.BARE, "Isolated segment should become bare"
+	)
+	assert_eq(grid.grid_data[11][3].type, SegmentClass.Type.BARE, "Bare segment should remain bare")
+
+	grid.free()
+
+
+func test_clear_bottom_rows() -> void:
+	var grid = GridClass.new()
+	grid._init_grid()
+
+	# Put segments in rows 18 and 19
+	grid.grid_data[18][0] = SegmentClass.new(SegmentClass.Type.BARE, Color.RED)
+	grid.grid_data[19][0] = SegmentClass.new(SegmentClass.Type.BARE, Color.BLUE)
+	# Put segment in row 10
+	grid.grid_data[10][0] = SegmentClass.new(SegmentClass.Type.BARE, Color.GREEN)
+
+	grid.clear_bottom_rows(2)
+
+	assert_null(grid.grid_data[18][0], "Row 18 (shifted) should be null")
+	assert_null(grid.grid_data[19][0], "Row 19 (shifted) should be null")
+	# Row 10 shifted by 2 down to row 12
+	assert_eq(
+		grid.grid_data[12][0].color, Color.GREEN, "Row 10 segment should have shifted to row 12"
+	)
+	assert_null(grid.grid_data[10][0], "Old row 10 should be null")
+
+	grid.free()
+
+
+func test_clear_slick_cutter_target() -> void:
+	var grid = GridClass.new()
+	grid._init_grid()
+
+	# Case A: There is an invalid full row.
+	# Create invalid full row at 19 (all isolated)
+	for c in range(GridClass.COLUMNS):
+		grid.grid_data[19][c] = SegmentClass.new(SegmentClass.Type.ISOLATED, Color.RED)
+	# Create valid full row at 18
+	for c in range(GridClass.COLUMNS):
+		var type = SegmentClass.Type.BARE
+		if c == 0 or c == 9:
+			type = SegmentClass.Type.CRIMP_LUG
+		grid.grid_data[18][c] = SegmentClass.new(type, Color.GREEN)
+
+	grid.clear_slick_cutter_target()
+
+	# Row 19 is full and invalid, so it should be cleared (meaning it is replaced
+	# by an empty row at top, other rows shift down).
+	# So grid.grid_data[19] becomes what was at row 18 (the valid full row)
+	for c in range(GridClass.COLUMNS):
+		assert_not_null(grid.grid_data[19][c], "Row 19 should have the shifted row 18 segments")
+
+	# Clean grid
+	grid._init_grid()
+
+	# Case B: No invalid full row. Clear the lowest non-empty row.
+	grid.grid_data[15][2] = SegmentClass.new(SegmentClass.Type.BARE, Color.BLUE)
+	grid.grid_data[17][3] = SegmentClass.new(SegmentClass.Type.BARE, Color.RED)
+
+	grid.clear_slick_cutter_target()
+
+	# Row 17 was lowest non-empty, so it should be cleared.
+	# Row 15 segment shifts to row 16. Row 17 should be null.
+	assert_null(grid.grid_data[17][3], "Row 17 should be cleared")
+	assert_eq(
+		grid.grid_data[16][2].color, Color.BLUE, "Row 15 segment should have shifted to row 16"
+	)
+	assert_null(grid.grid_data[15][2], "Old row 15 should be null")
+
+	grid.free()
