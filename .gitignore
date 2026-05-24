@@ -1,0 +1,11 @@
+# Godot-specific ignores
+.godot/
+Godot_Engine/
+build/
+*.zip
+*.log
+*.import
+.vs/
+.vscode/
+bin/
+obj/
