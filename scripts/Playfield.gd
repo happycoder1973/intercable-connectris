@@ -27,10 +27,22 @@ const LEVEL_THEMES: Dictionary = {
 	}
 }
 
+const LOADING_TIPS: Array[String] = [
+	"Werkzeuge werden in den Dolomiten entwickelt – Praezision wie bei gutem Speck.",
+	"AMX-Laser laedt... Abisolieren auf Knopfdruck. Schneller als jeder Seitenschneider!",
+	"STILO60 sagt: Sicherheit zuerst! Eine saubere Pressung verhindert den Kurzschluss.",
+	"Crimpen ist wie Knoedel drehen: Es braucht den richtigen Druck und das richtige Gefuehl.",
+	"Der Slick-Cutter schneidet sauberer als Oma den Apfelstrudel portioniert.",
+	"VDE-Schutzschild bereit. Sicherer als ein Doppelpass beim Wattn im Wirtshaus.",
+	"Wichtig: Ein schief gecrimpter Kabelschuh ist wie warmer Lagrein – einfach ungeniessbar.",
+	"Hast du gewusst? Unsere Werkzeuge halten laenger als der kaelteste Winter."
+]
+
 @export var fall_interval_start: float = 1.0
 
 var grid: Grid
 var current_block: Block
+var force_loading_screen: bool = false
 
 var _fall_timer: float = 0.0
 var _fall_interval: float = 1.0
@@ -41,6 +53,10 @@ var _game_over: bool = false
 var _is_animating_press: bool = false
 var _shield_time_left: float = 0.0
 var _time_left: float = 0.0
+
+var _milestones_shown: Dictionary = {
+	"shield": false, "level_3": false, "level_5": false, "level_10": false
+}
 
 # Programmatische UI-Referenzen
 var _bg_rect: TextureRect
@@ -84,6 +100,9 @@ func _ready() -> void:
 		_time_left = SettingsManager.expo_round_duration
 		if _timer_label != null:
 			_timer_label.visible = true
+
+	if not _is_running_in_test() or force_loading_screen:
+		_show_loading_screen()
 
 
 func _process(p_delta: float) -> void:
@@ -309,6 +328,14 @@ func activate_vde_shield() -> void:
 	_shield_time_left = 20.0
 	if _shield_overlay != null:
 		_shield_overlay.visible = true
+	_show_milestone_popup(
+		"shield",
+		"VDE-SICHERHEITSSCHILD ANE!",
+		(
+			"Das VDE-Schutzschild schuetzt dich vor Fehlern. "
+			+ "Mit isolierten Werkzeugen bist du bis 1000 Volt geschuetzt."
+		)
+	)
 
 
 func is_shield_active() -> bool:
@@ -518,6 +545,35 @@ func _on_level_up(p_old_level: int, p_new_level: int) -> void:
 		# Play level-up visual animation
 		_show_level_up_animation(new_theme["name"], p_new_level)
 
+		# Trigger milestone popups
+		if p_new_level == 3:
+			_show_milestone_popup(
+				"level_3",
+				"BAUSTELLEN-TIPP!",
+				(
+					"Stufe 3 erreicht! Draußen auf der Baustelle weht ein rauer Wind. "
+					+ "Sauber abisolieren mit dem AMX-Laser spart Zeit und schont die Nerven."
+				)
+			)
+		elif p_new_level == 5:
+			_show_milestone_popup(
+				"level_5",
+				"WINDPARK-PROFI!",
+				(
+					"Stufe 5 erreicht! In luftiger Höhe müssen Verbindungen standhalten. "
+					+ "Die STILO60-Presse sorgt für rüttelfeste Crimpungen."
+				)
+			)
+		elif p_new_level == 10:
+			_show_milestone_popup(
+				"level_10",
+				"DOLOMITEN-LABOR!",
+				(
+					"Wahnsinn! Stufe 10 erreicht! Du bist jetzt im Entwicklungslabor. "
+					+ "Hier testen wir die Grenzen der Belastbarkeit. Weiter so!"
+				)
+			)
+
 
 func _show_level_up_animation(p_name: String, p_level: int) -> void:
 	if _level_up_banner == null:
@@ -556,3 +612,91 @@ func _show_level_up_animation(p_name: String, p_level: int) -> void:
 		. set_ease(Tween.EASE_IN)
 	)
 	tween.tween_callback(func(): _level_up_banner.visible = false)
+
+
+func _show_milestone_popup(p_id: String, p_title: String, p_body: String) -> void:
+	if _milestones_shown.get(p_id, false):
+		return
+	_milestones_shown[p_id] = true
+
+	var popup = InfotainmentPopup.new()
+	popup.initialize(p_title, p_body)
+	var ui_layer = get_node_or_null("UILayer")
+	if ui_layer != null:
+		ui_layer.add_child(popup)
+	else:
+		add_child(popup)
+
+
+func _show_loading_screen() -> void:
+	var loading_layer = CanvasLayer.new()
+	loading_layer.name = "LoadingLayer"
+	loading_layer.layer = 20
+	add_child(loading_layer)
+
+	var bg = ColorRect.new()
+	bg.name = "Background"
+	bg.color = Color("#121212")
+	bg.anchor_right = 1.0
+	bg.anchor_bottom = 1.0
+	loading_layer.add_child(bg)
+
+	var vbox = VBoxContainer.new()
+	vbox.anchor_right = 1.0
+	vbox.anchor_bottom = 1.0
+	vbox.offset_left = 50
+	vbox.offset_right = -50
+	vbox.alignment = BoxContainer.ALIGNMENT_CENTER
+	vbox.add_theme_constant_override("separation", 20)
+	bg.add_child(vbox)
+
+	var title = Label.new()
+	title.text = "INTERCABLE CONNECTRIS"
+	title.add_theme_font_size_override("font_size", 28)
+	title.add_theme_color_override("font_color", Color("#E30613"))
+	title.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	vbox.add_child(title)
+
+	var spinner = Label.new()
+	spinner.text = "Lade Werkzeuge..."
+	spinner.add_theme_font_size_override("font_size", 16)
+	spinner.add_theme_color_override("font_color", Color.GRAY)
+	spinner.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	vbox.add_child(spinner)
+
+	var spin_tween = create_tween().set_loops()
+	spin_tween.tween_property(spinner, "modulate:a", 0.3, 0.4)
+	spin_tween.tween_property(spinner, "modulate:a", 1.0, 0.4)
+
+	var separator = Control.new()
+	separator.custom_minimum_size = Vector2(0, 20)
+	vbox.add_child(separator)
+
+	var tip_label = Label.new()
+	randomize()
+	var random_tip = LOADING_TIPS[randi() % LOADING_TIPS.size()]
+	tip_label.text = "TIPP:\n%s" % random_tip
+	tip_label.add_theme_font_size_override("font_size", 16)
+	tip_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	tip_label.autowrap_mode = TextServer.AUTOWRAP_WORD
+	vbox.add_child(tip_label)
+
+	_is_animating_press = true
+
+	var fade_tween = create_tween()
+	fade_tween.tween_interval(2.0)
+	fade_tween.tween_property(bg, "modulate:a", 0.0, 0.5)
+	fade_tween.tween_callback(
+		func():
+			_is_animating_press = false
+			loading_layer.queue_free()
+	)
+
+
+func _is_running_in_test() -> bool:
+	for arg in OS.get_cmdline_args():
+		if "gut" in arg.to_lower():
+			return true
+	if get_parent() != null and "gut" in get_parent().name.to_lower():
+		return true
+	return false
