@@ -165,3 +165,58 @@ func test_shake_grid() -> void:
 	assert_null(grid.grid_data[15][5], "Original row 15 should be null")
 
 	grid.free()
+
+
+func test_is_row_crimp_valid() -> void:
+	var grid = GridClass.new()
+	grid._init_grid()
+
+	# Create a row with correct workflow segments
+	for c in range(GridClass.COLUMNS):
+		var type = SegmentClass.Type.BARE
+		if c == 0 or c == 9:
+			type = SegmentClass.Type.CRIMP_LUG
+		grid.grid_data[19][c] = SegmentClass.new(type, Color.GREEN)
+
+	assert_true(grid.is_row_crimp_valid(19), "Row with proper workflow segments should be valid")
+
+	# Test invalid row (incomplete)
+	grid.grid_data[19][5] = null
+	assert_false(grid.is_row_crimp_valid(19), "Incomplete row should be invalid")
+
+	# Restore as invalid type
+	grid.grid_data[19][5] = SegmentClass.new(SegmentClass.Type.ISOLATED, Color.RED)
+	assert_false(
+		grid.is_row_crimp_valid(19), "Row with ISOLATED segment in middle should be invalid"
+	)
+
+	# Test invalid edge
+	grid.grid_data[19][0] = SegmentClass.new(SegmentClass.Type.BARE, Color.GREEN)
+	grid.grid_data[19][5] = SegmentClass.new(SegmentClass.Type.BARE, Color.GREEN)
+	assert_false(grid.is_row_crimp_valid(19), "Row with BARE segment at edge 0 should be invalid")
+
+	grid.free()
+
+
+func test_check_full_rows_status() -> void:
+	var grid = GridClass.new()
+	grid._init_grid()
+
+	# Row 18: full and valid
+	for c in range(GridClass.COLUMNS):
+		var type = SegmentClass.Type.BARE
+		if c == 0 or c == 9:
+			type = SegmentClass.Type.CRIMP_LUG
+		grid.grid_data[18][c] = SegmentClass.new(type, Color.GREEN)
+
+	# Row 19: full and invalid (all ISOLATED)
+	for c in range(GridClass.COLUMNS):
+		grid.grid_data[19][c] = SegmentClass.new(SegmentClass.Type.ISOLATED, Color.RED)
+
+	var status = grid.check_full_rows_status()
+	assert_eq(status["valid"].size(), 1, "Should have 1 valid row")
+	assert_eq(status["valid"][0], 18, "Valid row index should be 18")
+	assert_eq(status["invalid"].size(), 1, "Should have 1 invalid row")
+	assert_eq(status["invalid"][0], 19, "Invalid row index should be 19")
+
+	grid.free()
