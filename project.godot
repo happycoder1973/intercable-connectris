@@ -4,3 +4,6 @@ config_version=5
 
 config/name="Intercable Connectris"
 config/features=PackedStringArray("4.3", "Forward Plus")
+[autoload]
+
+SettingsManager="*res://scripts/SettingsManager.gd"

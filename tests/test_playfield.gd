@@ -5,6 +5,7 @@ const PlayfieldClass = preload("res://scripts/Playfield.gd")
 const GridClass = preload("res://scripts/Grid.gd")
 const BlockClass = preload("res://scripts/Block.gd")
 const SegmentClass = preload("res://scripts/Segment.gd")
+const GameOverOverlayClass = preload("res://scripts/GameOverOverlay.gd")
 
 
 func test_playfield_initialization() -> void:
@@ -308,3 +309,105 @@ func test_camera_shake_does_not_crash() -> void:
 	assert_true(playfield._shield_overlay.visible, "Shield overlay visible when active")
 
 	playfield.free()
+
+
+func test_expo_timer_countdown() -> void:
+	SettingsManager.current_mode = SettingsManager.GameMode.EXPO
+	SettingsManager.expo_round_duration = 180.0
+
+	var playfield = PlayfieldClass.new()
+	add_child(playfield)
+
+	assert_eq(playfield._time_left, 180.0, "Time left should be initialized to 180s")
+
+	watch_signals(playfield)
+	playfield._process(10.0)
+
+	assert_eq(playfield._time_left, 170.0, "Time left should decrease to 170s after 10s delta")
+	assert_signal_emitted(playfield, "timer_updated")
+
+	playfield.free()
+	# Restore Settings
+	SettingsManager.current_mode = SettingsManager.GameMode.CLASSIC
+
+
+func test_timeout_triggers_game_over() -> void:
+	SettingsManager.current_mode = SettingsManager.GameMode.EXPO
+	SettingsManager.expo_round_duration = 5.0
+
+	var playfield = PlayfieldClass.new()
+	add_child(playfield)
+
+	watch_signals(playfield)
+	playfield._process(6.0)
+
+	assert_true(playfield._game_over, "Timeout should trigger game over")
+	assert_signal_emitted(playfield, "game_over_triggered")
+
+	# Find the GameOverOverlay child
+	var overlay = null
+	for child in playfield.get_children():
+		if child.get_script() == GameOverOverlayClass:
+			overlay = child
+			break
+	assert_not_null(overlay, "GameOverOverlay should be instantiated on timeout")
+	if overlay != null:
+		assert_eq(overlay._title_label.text, "ZEIT ABGELAUFEN!", "Title should indicate timeout")
+
+	playfield.free()
+	SettingsManager.current_mode = SettingsManager.GameMode.CLASSIC
+	SettingsManager.expo_round_duration = 180.0
+
+
+func test_spawn_collision_triggers_game_over() -> void:
+	SettingsManager.current_mode = SettingsManager.GameMode.CLASSIC
+
+	var playfield = PlayfieldClass.new()
+	add_child(playfield)
+
+	# Put segments at spawn position to force immediate collision
+	var grid = playfield.grid
+	for r in range(3):
+		for c in range(GridClass.COLUMNS):
+			grid.grid_data[r][c] = SegmentClass.new(SegmentClass.Type.BARE, Color.RED)
+
+	watch_signals(playfield)
+	playfield.spawn_new_block()
+
+	assert_true(playfield._game_over, "Spawn collision should trigger game over")
+	assert_signal_emitted(playfield, "game_over_triggered")
+
+	# Find the GameOverOverlay child
+	var overlay = null
+	for child in playfield.get_children():
+		if child.get_script() == GameOverOverlayClass:
+			overlay = child
+			break
+	assert_not_null(overlay, "GameOverOverlay should be instantiated on spawn collision")
+	if overlay != null:
+		assert_eq(overlay._title_label.text, "GAME OVER", "Title should indicate game over")
+
+	playfield.free()
+
+
+func test_game_over_overlay_initialization() -> void:
+	var scene = load("res://scenes/game_over_overlay.tscn")
+	var overlay = scene.instantiate() as GameOverOverlayClass
+	add_child(overlay)
+
+	overlay.initialize(250, 5, false)
+	assert_eq(overlay._title_label.text, "GAME OVER")
+	assert_string_contains(overlay._score_label.text, "250")
+	assert_string_contains(overlay._level_label.text, "5")
+
+	overlay.initialize(120, 2, true)
+	assert_eq(overlay._title_label.text, "ZEIT ABGELAUFEN!")
+	assert_string_contains(overlay._score_label.text, "120")
+	assert_string_contains(overlay._level_label.text, "2")
+
+	watch_signals(overlay)
+	overlay._on_ContinueButton_pressed()
+	assert_signal_emitted(overlay, "name_input_requested")
+
+	# Since queue_free is called, let's wait a frame or check that it's queued for deletion
+	assert_true(overlay.is_queued_for_deletion())

@@ -6,6 +6,7 @@ signal score_changed(new_score: int, level: int)
 signal game_over_triggered(final_score: int)
 signal crimp_press_started(row_index: int)
 signal crimp_press_completed(row_index: int)
+signal timer_updated(time_left: float)
 
 @export var fall_interval_start: float = 1.0
 
@@ -20,6 +21,7 @@ var _total_rows_cleared: int = 0
 var _game_over: bool = false
 var _is_animating_press: bool = false
 var _shield_time_left: float = 0.0
+var _time_left: float = 0.0
 
 @onready var _press_overlay: Node2D = get_node_or_null("PressOverlay")
 @onready var _sfx_press: AudioStreamPlayer = get_node_or_null("SfxPress")
@@ -47,12 +49,21 @@ func _ready() -> void:
 	update_difficulty()
 	spawn_new_block()
 
+	if SettingsManager.current_mode == SettingsManager.GameMode.EXPO:
+		_time_left = SettingsManager.expo_round_duration
+
 
 func _process(p_delta: float) -> void:
 	if _shield_time_left > 0.0:
 		_shield_time_left = max(0.0, _shield_time_left - p_delta)
 		if _shield_overlay != null:
 			_shield_overlay.visible = _shield_time_left > 0.0
+
+	if SettingsManager.current_mode == SettingsManager.GameMode.EXPO and not _game_over:
+		_time_left = max(0.0, _time_left - p_delta)
+		timer_updated.emit(_time_left)
+		if _time_left <= 0.0:
+			_trigger_game_over(true)
 
 	if _game_over or _is_animating_press:
 		return
@@ -113,10 +124,7 @@ func spawn_new_block() -> void:
 				_sfx_press.play()
 			_update_block_visual_position()
 		else:
-			_game_over = true
-			game_over_triggered.emit(_score)
-			current_block.queue_free()
-			current_block = null
+			_trigger_game_over(false)
 
 
 func move_block_down() -> void:
@@ -280,3 +288,23 @@ func _trigger_camera_shake() -> void:
 		shake_strength *= 0.9
 
 	tween.tween_property(_camera, "offset", Vector2.ZERO, step_time)
+
+
+func _trigger_game_over(p_was_time_out: bool) -> void:
+	if _game_over:
+		return
+	_game_over = true
+	game_over_triggered.emit(_score)
+	if current_block != null:
+		current_block.queue_free()
+		current_block = null
+
+	var overlay_scene = load("res://scenes/game_over_overlay.tscn")
+	var overlay = overlay_scene.instantiate()
+	add_child(overlay)
+	overlay.initialize(_score, _level, p_was_time_out)
+	overlay.name_input_requested.connect(_on_name_input_requested)
+
+
+func _on_name_input_requested() -> void:
+	print("Name input requested")
