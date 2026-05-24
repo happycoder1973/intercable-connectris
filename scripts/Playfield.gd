@@ -796,5 +796,6 @@ func _is_running_in_test() -> bool:
 
 
 func _trigger_rumble(p_weak: float, p_strong: float, p_duration: float) -> void:
-	if Input.get_connected_joypads().size() > 0:
-		Input.start_joy_vibration(0, p_weak, p_strong, p_duration)
+	var joypads = Input.get_connected_joypads()
+	if joypads.size() > 0:
+		Input.start_joy_vibration(joypads[0], p_weak, p_strong, p_duration)

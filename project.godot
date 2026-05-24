@@ -4,7 +4,7 @@ config_version=5
 
 config/name="Intercable Connectris"
 run/main_scene="res://scenes/main_menu.tscn"
-config/features=PackedStringArray("4.3", "Forward Plus")
+config/features=PackedStringArray("4.3", "Compatibility")
 [autoload]
 
 SettingsManager="*res://scripts/SettingsManager.gd"
@@ -27,3 +27,9 @@ window/stretch/aspect="keep"
 
 pointing/emulate_touch_from_mouse=true
 pointing/emulate_mouse_from_touch=true
+
+[rendering]
+
+renderer/rendering_method="gl_compatibility"
+renderer/rendering_method.mobile="gl_compatibility"
+
