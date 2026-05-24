@@ -3,10 +3,29 @@ extends Node2D
 ## Verwaltet die Spielschleife, Punkteberechnung, Eingaben und den fallenden Block.
 
 signal score_changed(new_score: int, level: int)
+signal level_up(new_level: int, level_name: String)
 signal game_over_triggered(final_score: int)
 signal crimp_press_started(row_index: int)
 signal crimp_press_completed(row_index: int)
 signal timer_updated(time_left: float)
+
+const LEVEL_THEMES: Dictionary = {
+	1: {"name": "Werkstatt", "color_start": Color("#1a1e29"), "color_end": Color("#10121a")},
+	2: {"name": "Baustelle", "color_start": Color("#262016"), "color_end": Color("#14100b")},
+	3: {"name": "Industrieanlage", "color_start": Color("#1c2420"), "color_end": Color("#0e1210")},
+	4: {"name": "E-Verteilerraum", "color_start": Color("#132237"), "color_end": Color("#0a121e")},
+	5: {"name": "Windpark", "color_start": Color("#1b2e2d"), "color_end": Color("#0f1a1a")},
+	6: {"name": "Automobilwerk", "color_start": Color("#2b181a"), "color_end": Color("#160c0d")},
+	7: {"name": "Solarpark", "color_start": Color("#2d2715"), "color_end": Color("#17130b")},
+	8: {"name": "Rechenzentrum", "color_start": Color("#112d1b"), "color_end": Color("#09170e")},
+	9: {"name": "U-Bahn-Tunnel", "color_start": Color("#261e1b"), "color_end": Color("#130f0d")},
+	10:
+	{
+		"name": "Dolomiten-Entwicklungslabor",
+		"color_start": Color("#291515"),
+		"color_end": Color("#150a0a")
+	}
+}
 
 @export var fall_interval_start: float = 1.0
 
@@ -22,6 +41,15 @@ var _game_over: bool = false
 var _is_animating_press: bool = false
 var _shield_time_left: float = 0.0
 var _time_left: float = 0.0
+
+# Programmatische UI-Referenzen
+var _bg_rect: TextureRect
+var _level_label: Label
+var _score_label: Label
+var _timer_label: Label
+var _level_up_banner: CenterContainer
+var _level_up_title: Label
+var _level_up_name: Label
 
 @onready var _press_overlay: Node2D = get_node_or_null("PressOverlay")
 @onready var _sfx_press: AudioStreamPlayer = get_node_or_null("SfxPress")
@@ -39,6 +67,8 @@ func _ready() -> void:
 	_game_over = false
 	_fall_interval = fall_interval_start
 
+	_create_ui_and_background()
+
 	if grid == null:
 		if has_node("Grid"):
 			grid = $Grid as Grid
@@ -47,10 +77,13 @@ func _ready() -> void:
 			add_child(grid)
 
 	update_difficulty()
+	_update_background_colors()
 	spawn_new_block()
 
 	if SettingsManager.current_mode == SettingsManager.GameMode.EXPO:
 		_time_left = SettingsManager.expo_round_duration
+		if _timer_label != null:
+			_timer_label.visible = true
 
 
 func _process(p_delta: float) -> void:
@@ -62,6 +95,8 @@ func _process(p_delta: float) -> void:
 	if SettingsManager.current_mode == SettingsManager.GameMode.EXPO and not _game_over:
 		_time_left = max(0.0, _time_left - p_delta)
 		timer_updated.emit(_time_left)
+		if _timer_label != null:
+			_timer_label.text = "ZEIT: %d" % ceil(_time_left)
 		if _time_left <= 0.0:
 			_trigger_game_over(true)
 
@@ -191,7 +226,16 @@ func _update_block_visual_position() -> void:
 func _add_score(p_cleared_rows: int) -> void:
 	_score += p_cleared_rows
 	_total_rows_cleared += p_cleared_rows
+	var old_level = _level
 	_level = 1 + (_total_rows_cleared / 10)
+
+	if _score_label != null:
+		_score_label.text = "PUNKTE: %d" % _score
+	if _level_label != null:
+		_level_label.text = "LEVEL: %d" % _level
+
+	if _level > old_level:
+		_on_level_up(old_level, _level)
 
 	update_difficulty()
 	score_changed.emit(_score, _level)
@@ -308,3 +352,207 @@ func _trigger_game_over(p_was_time_out: bool) -> void:
 
 func _on_name_input_requested() -> void:
 	print("Name input requested")
+
+
+func _create_ui_and_background() -> void:
+	# Background CanvasLayer
+	var bg_layer = CanvasLayer.new()
+	bg_layer.name = "BackgroundLayer"
+	bg_layer.layer = -100
+	add_child(bg_layer)
+
+	_bg_rect = TextureRect.new()
+	_bg_rect.name = "BackgroundRect"
+	_bg_rect.anchor_right = 1.0
+	_bg_rect.anchor_bottom = 1.0
+	_bg_rect.offset_left = 0
+	_bg_rect.offset_top = 0
+	_bg_rect.offset_right = 0
+	_bg_rect.offset_bottom = 0
+	_bg_rect.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
+	bg_layer.add_child(_bg_rect)
+
+	var bg_texture = GradientTexture2D.new()
+	bg_texture.width = 256
+	bg_texture.height = 256
+	bg_texture.fill = GradientTexture2D.FILL_LINEAR
+	bg_texture.fill_from = Vector2(0.5, 0.0)
+	bg_texture.fill_to = Vector2(0.5, 1.0)
+
+	var gradient = Gradient.new()
+	bg_texture.gradient = gradient
+	_bg_rect.texture = bg_texture
+
+	# UI CanvasLayer
+	var ui_layer = CanvasLayer.new()
+	ui_layer.name = "UILayer"
+	ui_layer.layer = 10
+	add_child(ui_layer)
+
+	var hud = MarginContainer.new()
+	hud.name = "HUD"
+	hud.anchor_right = 1.0
+	hud.offset_left = 0
+	hud.offset_top = 0
+	hud.offset_right = 0
+	hud.offset_bottom = 60
+	hud.add_theme_constant_override("margin_left", 20)
+	hud.add_theme_constant_override("margin_right", 20)
+	hud.add_theme_constant_override("margin_top", 20)
+	ui_layer.add_child(hud)
+
+	var hbox = HBoxContainer.new()
+	hud.add_child(hbox)
+
+	_level_label = Label.new()
+	_level_label.name = "LevelLabel"
+	_level_label.text = "LEVEL: 1"
+	_level_label.add_theme_color_override("font_color", Color("#FFD000"))
+	hbox.add_child(_level_label)
+
+	var spacer1 = Control.new()
+	spacer1.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	hbox.add_child(spacer1)
+
+	_timer_label = Label.new()
+	_timer_label.name = "TimerLabel"
+	_timer_label.text = ""
+	_timer_label.visible = false
+	hbox.add_child(_timer_label)
+
+	var spacer2 = Control.new()
+	spacer2.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	hbox.add_child(spacer2)
+
+	_score_label = Label.new()
+	_score_label.name = "ScoreLabel"
+	_score_label.text = "PUNKTE: 0"
+	_score_label.add_theme_color_override("font_color", Color("#E30613"))
+	hbox.add_child(_score_label)
+
+	# Level Up Banner Container
+	_level_up_banner = CenterContainer.new()
+	_level_up_banner.name = "LevelUpBanner"
+	_level_up_banner.anchor_right = 1.0
+	_level_up_banner.anchor_bottom = 1.0
+	_level_up_banner.offset_left = 0
+	_level_up_banner.offset_top = 0
+	_level_up_banner.offset_right = 0
+	_level_up_banner.offset_bottom = 0
+	_level_up_banner.visible = false
+	_level_up_banner.pivot_offset = Vector2(0.5, 0.5)
+	ui_layer.add_child(_level_up_banner)
+
+	var panel = PanelContainer.new()
+	var style = StyleBoxFlat.new()
+	style.bg_color = Color(0.1, 0.1, 0.15, 0.85)
+	style.border_width_left = 4
+	style.border_width_top = 4
+	style.border_width_right = 4
+	style.border_width_bottom = 4
+	style.border_color = Color("#FFD000")
+	style.corner_radius_top_left = 12
+	style.corner_radius_top_right = 12
+	style.corner_radius_bottom_left = 12
+	style.corner_radius_bottom_right = 12
+	style.content_margin_left = 40
+	style.content_margin_right = 40
+	style.content_margin_top = 20
+	style.content_margin_bottom = 20
+	panel.add_theme_stylebox_override("panel", style)
+	_level_up_banner.add_child(panel)
+
+	var vbox = VBoxContainer.new()
+	panel.add_child(vbox)
+
+	_level_up_title = Label.new()
+	_level_up_title.name = "TitleLabel"
+	_level_up_title.text = "LEVEL UP!"
+	_level_up_title.add_theme_font_size_override("font_size", 32)
+	_level_up_title.add_theme_color_override("font_color", Color("#FFD000"))
+	_level_up_title.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	vbox.add_child(_level_up_title)
+
+	_level_up_name = Label.new()
+	_level_up_name.name = "NameLabel"
+	_level_up_name.text = "Werkstatt"
+	_level_up_name.add_theme_font_size_override("font_size", 24)
+	_level_up_name.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	vbox.add_child(_level_up_name)
+
+
+func _update_background_colors() -> void:
+	if _bg_rect == null or _bg_rect.texture == null:
+		return
+	var theme = LEVEL_THEMES.get(min(_level, 10))
+	if theme:
+		var gradient = _bg_rect.texture.gradient
+		gradient.set_color(0, theme["color_start"])
+		gradient.set_color(1, theme["color_end"])
+
+
+func _on_level_up(p_old_level: int, p_new_level: int) -> void:
+	var old_theme = LEVEL_THEMES.get(min(p_old_level, 10))
+	var new_theme = LEVEL_THEMES.get(min(p_new_level, 10))
+
+	if new_theme:
+		level_up.emit(p_new_level, new_theme["name"])
+
+		# Animate background transition
+		if _bg_rect != null and _bg_rect.texture != null and old_theme != null:
+			var gradient = _bg_rect.texture.gradient
+			var tween = create_tween()
+			tween.tween_method(
+				func(c): gradient.set_color(0, c),
+				old_theme["color_start"],
+				new_theme["color_start"],
+				1.5
+			)
+			tween.parallel().tween_method(
+				func(c): gradient.set_color(1, c),
+				old_theme["color_end"],
+				new_theme["color_end"],
+				1.5
+			)
+
+		# Play level-up visual animation
+		_show_level_up_animation(new_theme["name"], p_new_level)
+
+
+func _show_level_up_animation(p_name: String, p_level: int) -> void:
+	if _level_up_banner == null:
+		return
+
+	_level_up_name.text = "Stufe %d: %s" % [p_level, p_name]
+	_level_up_banner.scale = Vector2(0.1, 0.1)
+	_level_up_banner.pivot_offset = get_viewport_rect().size / 2.0
+	_level_up_banner.visible = true
+
+	var tween = create_tween()
+	# Pop in
+	(
+		tween
+		. tween_property(_level_up_banner, "scale", Vector2(1, 1), 0.5)
+		. set_trans(Tween.TRANS_BACK)
+		. set_ease(Tween.EASE_OUT)
+	)
+	# Play sound (pitched menu click)
+	tween.tween_callback(
+		func():
+			var player = AudioStreamPlayer.new()
+			player.stream = load("res://assets/audio/menu_klick.wav")
+			player.pitch_scale = 1.5
+			add_child(player)
+			player.play()
+			player.finished.connect(player.queue_free)
+	)
+	# Stay
+	tween.tween_interval(1.5)
+	# Pop out/fade
+	(
+		tween
+		. tween_property(_level_up_banner, "scale", Vector2(0, 0), 0.3)
+		. set_trans(Tween.TRANS_QUAD)
+		. set_ease(Tween.EASE_IN)
+	)
+	tween.tween_callback(func(): _level_up_banner.visible = false)
