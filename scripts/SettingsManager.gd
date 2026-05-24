@@ -14,6 +14,7 @@ var is_sound_enabled: bool = true
 func _ready() -> void:
 	load_settings()
 	apply_kiosk_settings()
+	apply_audio_settings()
 
 
 func _notification(what: int) -> void:
@@ -29,6 +30,7 @@ func save_settings() -> void:
 	config.set_value("general", "is_kiosk_mode", is_kiosk_mode)
 	config.set_value("general", "is_sound_enabled", is_sound_enabled)
 	config.save(SAVE_PATH)
+	apply_audio_settings()
 
 
 func load_settings() -> void:
@@ -44,6 +46,8 @@ func load_settings() -> void:
 	for arg in OS.get_cmdline_args():
 		if arg == "--kiosk":
 			is_kiosk_mode = true
+
+	apply_audio_settings()
 
 
 func apply_kiosk_settings() -> void:
@@ -61,3 +65,9 @@ func _is_running_in_test() -> bool:
 		if "gut" in arg:
 			return true
 	return false
+
+
+func apply_audio_settings() -> void:
+	var master_bus_idx = AudioServer.get_bus_index("Master")
+	if master_bus_idx != -1:
+		AudioServer.set_bus_mute(master_bus_idx, not is_sound_enabled)

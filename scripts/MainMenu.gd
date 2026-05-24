@@ -1,6 +1,9 @@
 extends Control
 ## Das Hauptmenue von Intercable Connectris. Zeigt die Bestenliste und Spielmodus-Optionen.
 
+var _sound_btn: Button
+var _sfx_click: AudioStreamPlayer
+
 @onready var _classic_button: Button = get_node_or_null("HBox/LeftPanel/VBox/ClassicButton")
 @onready var _expo_button: Button = get_node_or_null("HBox/LeftPanel/VBox/ExpoButton")
 @onready var _quit_button: Button = get_node_or_null("HBox/LeftPanel/VBox/QuitButton")
@@ -8,12 +11,31 @@ extends Control
 
 
 func _ready() -> void:
+	# Programmatic Click SFX Player
+	_sfx_click = AudioStreamPlayer.new()
+	add_child(_sfx_click)
+	_sfx_click.stream = load("res://assets/audio/menu_klick.wav")
+
 	if _classic_button != null:
 		_classic_button.pressed.connect(_on_classic_pressed)
 	if _expo_button != null:
 		_expo_button.pressed.connect(_on_expo_pressed)
 	if _quit_button != null:
 		_quit_button.pressed.connect(_on_quit_pressed)
+
+	# Programmatic Sound Toggle Button
+	if _quit_button != null:
+		_sound_btn = Button.new()
+		_sound_btn.custom_minimum_size = Vector2(250, 60)
+		_sound_btn.size_flags_horizontal = Control.SIZE_SHRINK_CENTER
+		_sound_btn.theme_type_variation = "Button"
+		_sound_btn.pressed.connect(_on_sound_pressed)
+
+		var vbox = _quit_button.get_parent()
+		vbox.add_child(_sound_btn)
+		vbox.move_child(_sound_btn, _quit_button.get_index())
+
+		_update_sound_button_text()
 
 	_load_highscores()
 
@@ -93,16 +115,36 @@ func _load_highscores() -> void:
 
 
 func _on_classic_pressed() -> void:
+	_play_click_sound()
 	SettingsManager.current_mode = SettingsManager.GameMode.CLASSIC
 	SettingsManager.save_settings()
 	get_tree().change_scene_to_file("res://scenes/playfield.tscn")
 
 
 func _on_expo_pressed() -> void:
+	_play_click_sound()
 	SettingsManager.current_mode = SettingsManager.GameMode.EXPO
 	SettingsManager.save_settings()
 	get_tree().change_scene_to_file("res://scenes/playfield.tscn")
 
 
 func _on_quit_pressed() -> void:
+	_play_click_sound()
 	get_tree().quit()
+
+
+func _on_sound_pressed() -> void:
+	SettingsManager.is_sound_enabled = not SettingsManager.is_sound_enabled
+	SettingsManager.save_settings()
+	_update_sound_button_text()
+	_play_click_sound()
+
+
+func _update_sound_button_text() -> void:
+	if _sound_btn != null:
+		_sound_btn.text = "Ton: AN" if SettingsManager.is_sound_enabled else "Ton: AUS"
+
+
+func _play_click_sound() -> void:
+	if SettingsManager.is_sound_enabled and _sfx_click != null:
+		_sfx_click.play()
