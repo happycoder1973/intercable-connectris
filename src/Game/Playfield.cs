@@ -17,6 +17,11 @@ public partial class Playfield : Node2D
     private int _level = 1;
     private bool _gameOver = false;
 
+    private AudioStreamPlayer _sfxLock;
+    private AudioStreamPlayer _sfxLaser;
+    private AudioStreamPlayer _sfxCut;
+    private Label _scoreLabel;
+
 
     public override void _Ready()
     {
@@ -30,6 +35,25 @@ public partial class Playfield : Node2D
         _powerUpManager.Name = "PowerUpManager";
         _powerUpManager.Grid = _grid;
         AddChild(_powerUpManager);
+
+        // Setup Audio
+        _sfxLock = new AudioStreamPlayer { Stream = GD.Load<AudioStream>("res://assets/audio/pressen.wav") };
+        _sfxLaser = new AudioStreamPlayer { Stream = GD.Load<AudioStream>("res://assets/audio/laser_zischen.wav") };
+        _sfxCut = new AudioStreamPlayer { Stream = GD.Load<AudioStream>("res://assets/audio/schneiden.wav") };
+        AddChild(_sfxLock);
+        AddChild(_sfxLaser);
+        AddChild(_sfxCut);
+
+        // Setup Score UI
+        var uiLayer = new CanvasLayer();
+        _scoreLabel = new Label 
+        { 
+            Text = "Score: 0\nLevel: 1",
+            Position = new Vector2(20, 20)
+        };
+        _scoreLabel.AddThemeFontSizeOverride("font_size", 32);
+        uiLayer.AddChild(_scoreLabel);
+        AddChild(uiLayer);
 
         SpawnNewBlock();
     }
@@ -46,6 +70,12 @@ public partial class Playfield : Node2D
         }
 
         HandleInput();
+
+        if (_currentBlock != null)
+        {
+            // Sync pixel position with grid
+            _currentBlock.Position = new Vector2(_currentBlock.GridPosition.X * 64, _currentBlock.GridPosition.Y * 64);
+        }
     }
 
     private void HandleInput()
@@ -86,11 +116,22 @@ public partial class Playfield : Node2D
         }
         else
         {
+            _sfxLock?.Play();
             _grid.LockBlock(_currentBlock);
             _score += 100; // Increase score when block is locked
+            UpdateScoreUI();
+            
             _currentBlock.QueueFree();
             _currentBlock = null;
             SpawnNewBlock();
+        }
+    }
+
+    private void UpdateScoreUI()
+    {
+        if (_scoreLabel != null)
+        {
+            _scoreLabel.Text = $"Score: {_score}\nLevel: {_level}";
         }
     }
 

@@ -58,10 +58,7 @@ public partial class TestRunner : Node
         GD.Print($"Tests completed: {passed} passed, {failed} failed.");
         GD.Print("=================================\n");
 
-        // Force a brief delay so logs can flush before exit
-        GetTree().CreateTimer(0.1f).Timeout += () => 
-        {
-            GetTree().Quit(failed > 0 ? 1 : 0);
-        };
+        // Exit immediately using deferred call
+        GetTree().CallDeferred("Quit", failed > 0 ? 1 : 0);
     }
 }

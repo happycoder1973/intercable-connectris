@@ -3,7 +3,7 @@ param (
 )
 
 Write-Host "Building project before running tests..." -ForegroundColor Cyan
-& $GodotExe --headless --build-solutions
+dotnet build
 
 Write-Host "Running Godot C# tests..." -ForegroundColor Cyan
 

@@ -18,9 +18,20 @@ public partial class TetrisBlock : Node2D
     public bool[,] ShapeMatrix { get; set; }
     public Color BlockColor { get; set; }
 
+    private Texture2D _texture;
+
     public override void _Ready()
     {
-        // Initialization if needed
+        UpdateTexture();
+    }
+
+    private void UpdateTexture()
+    {
+        string path = "res://assets/textures/isoliert.png";
+        if (CurrentCableState == CableState.Bare) path = "res://assets/textures/blank.png";
+        else if (CurrentCableState == CableState.Crimped) path = "res://assets/textures/gecrimpt.png";
+        
+        _texture = GD.Load<Texture2D>(path);
     }
 
     public void RotateRight()
@@ -58,7 +69,27 @@ public partial class TetrisBlock : Node2D
     public void SetCableState(CableState newState)
     {
         CurrentCableState = newState;
-        // Visual update could be triggered here
+        UpdateTexture();
         QueueRedraw();
+    }
+
+    public override void _Draw()
+    {
+        if (_texture == null || ShapeMatrix == null) return;
+
+        int rows = ShapeMatrix.GetLength(0);
+        int cols = ShapeMatrix.GetLength(1);
+        int blockSize = 64;
+
+        for (int r = 0; r < rows; r++)
+        {
+            for (int c = 0; c < cols; c++)
+            {
+                if (ShapeMatrix[r, c])
+                {
+                    DrawTexture(_texture, new Vector2(c * blockSize, r * blockSize), BlockColor);
+                }
+            }
+        }
     }
 }

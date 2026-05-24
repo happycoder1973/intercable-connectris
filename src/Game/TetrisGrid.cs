@@ -16,9 +16,16 @@ public partial class TetrisGrid : Node2D
     }
 
     private CellData[,] _grid = new CellData[Columns, Rows];
+    
+    private Texture2D _texIsolated;
+    private Texture2D _texBare;
+    private Texture2D _texCrimped;
 
     public override void _Ready()
     {
+        _texIsolated = GD.Load<Texture2D>("res://assets/textures/isoliert.png");
+        _texBare = GD.Load<Texture2D>("res://assets/textures/blank.png");
+        _texCrimped = GD.Load<Texture2D>("res://assets/textures/gecrimpt.png");
         ClearGrid();
     }
 
@@ -189,5 +196,33 @@ public partial class TetrisGrid : Node2D
             }
         }
         QueueRedraw();
+    }
+
+    public override void _Draw()
+    {
+        int blockSize = 64;
+
+        // Draw grid background and border
+        DrawRect(new Rect2(0, 0, Columns * blockSize, Rows * blockSize), new Color(0, 0, 0, 0.5f));
+        DrawRect(new Rect2(0, 0, Columns * blockSize, Rows * blockSize), Colors.White, false, 2.0f);
+
+        for (int x = 0; x < Columns; x++)
+        {
+            for (int y = 0; y < Rows; y++)
+            {
+                if (_grid[x, y] != null)
+                {
+                    CellData cell = _grid[x, y];
+                    Texture2D tex = _texIsolated;
+                    if (cell.State == CableState.Bare) tex = _texBare;
+                    else if (cell.State == CableState.Crimped) tex = _texCrimped;
+
+                    if (tex != null)
+                    {
+                        DrawTexture(tex, new Vector2(x * blockSize, y * blockSize), cell.Color);
+                    }
+                }
+            }
+        }
     }
 }
