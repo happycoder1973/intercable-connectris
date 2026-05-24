@@ -10,6 +10,13 @@ signal name_input_requested
 
 
 func _ready() -> void:
+	anchor_right = 1.0
+	anchor_bottom = 1.0
+	offset_left = 0
+	offset_top = 0
+	offset_right = 0
+	offset_bottom = 0
+
 	if _continue_button != null:
 		_continue_button.pressed.connect(_on_ContinueButton_pressed)
 

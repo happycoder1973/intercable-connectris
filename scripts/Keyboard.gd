@@ -12,6 +12,14 @@ var _ok_button: Button
 func _ready() -> void:
 	process_mode = PROCESS_MODE_ALWAYS
 
+	# Ensure the container covers the entire viewport when added to a CanvasLayer
+	anchor_right = 1.0
+	anchor_bottom = 1.0
+	offset_left = 0
+	offset_top = 0
+	offset_right = 0
+	offset_bottom = 0
+
 	# Full screen overlay background
 	var overlay = ColorRect.new()
 	overlay.color = Color(0, 0, 0, 0.7)

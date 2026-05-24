@@ -35,6 +35,11 @@ func test_keyboard_input_limits() -> void:
 	var keyboard = KeyboardClass.new()
 	add_child(keyboard)
 
+	assert_eq(keyboard.anchor_right, 1.0, "KeyboardOverlay should anchor right")
+	assert_eq(keyboard.anchor_bottom, 1.0, "KeyboardOverlay should anchor bottom")
+	assert_eq(keyboard.offset_left, 0.0, "KeyboardOverlay offset_left should be 0")
+	assert_eq(keyboard.offset_top, 0.0, "KeyboardOverlay offset_top should be 0")
+
 	keyboard._on_key_pressed("A")
 	keyboard._on_key_pressed("B")
 	keyboard._on_key_pressed("C")

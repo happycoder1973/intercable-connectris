@@ -449,7 +449,11 @@ func _trigger_game_over(p_was_time_out: bool) -> void:
 
 	var overlay_scene = load("res://scenes/game_over_overlay.tscn")
 	var overlay = overlay_scene.instantiate()
-	add_child(overlay)
+	var ui_layer = get_node_or_null("UILayer")
+	if ui_layer != null:
+		ui_layer.add_child(overlay)
+	else:
+		add_child(overlay)
 	overlay.initialize(_score, _level, p_was_time_out)
 	overlay.name_input_requested.connect(_on_name_input_requested)
 

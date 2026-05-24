@@ -345,14 +345,14 @@ func test_timeout_triggers_game_over() -> void:
 	assert_signal_emitted(playfield, "game_over_triggered")
 
 	# Find the GameOverOverlay child
-	var overlay = null
-	for child in playfield.get_children():
-		if child.get_script() == GameOverOverlayClass:
-			overlay = child
-			break
+	var overlay = playfield.find_child("GameOverOverlay", true, false)
 	assert_not_null(overlay, "GameOverOverlay should be instantiated on timeout")
 	if overlay != null:
 		assert_eq(overlay._title_label.text, "ZEIT ABGELAUFEN!", "Title should indicate timeout")
+		assert_eq(overlay.anchor_right, 1.0, "GameOverOverlay should anchor right")
+		assert_eq(overlay.anchor_bottom, 1.0, "GameOverOverlay should anchor bottom")
+		assert_eq(overlay.offset_left, 0.0, "GameOverOverlay offset_left should be 0")
+		assert_eq(overlay.offset_right, 0.0, "GameOverOverlay offset_right should be 0")
 
 	playfield.free()
 	SettingsManager.current_mode = SettingsManager.GameMode.CLASSIC
@@ -378,11 +378,7 @@ func test_spawn_collision_triggers_game_over() -> void:
 	assert_signal_emitted(playfield, "game_over_triggered")
 
 	# Find the GameOverOverlay child
-	var overlay = null
-	for child in playfield.get_children():
-		if child.get_script() == GameOverOverlayClass:
-			overlay = child
-			break
+	var overlay = playfield.find_child("GameOverOverlay", true, false)
 	assert_not_null(overlay, "GameOverOverlay should be instantiated on spawn collision")
 	if overlay != null:
 		assert_eq(overlay._title_label.text, "GAME OVER", "Title should indicate game over")
@@ -394,6 +390,11 @@ func test_game_over_overlay_initialization() -> void:
 	var scene = load("res://scenes/game_over_overlay.tscn")
 	var overlay = scene.instantiate() as GameOverOverlayClass
 	add_child(overlay)
+
+	assert_eq(overlay.anchor_right, 1.0, "GameOverOverlay should anchor right")
+	assert_eq(overlay.anchor_bottom, 1.0, "GameOverOverlay should anchor bottom")
+	assert_eq(overlay.offset_left, 0.0, "GameOverOverlay offset_left should be 0")
+	assert_eq(overlay.offset_top, 0.0, "GameOverOverlay offset_top should be 0")
 
 	overlay.initialize(250, 5, false)
 	assert_eq(overlay._title_label.text, "GAME OVER")
