@@ -72,6 +72,7 @@ var _timer_label: Label
 var _level_up_banner: CenterContainer
 var _level_up_title: Label
 var _level_up_name: Label
+var _powerup_labels: Dictionary = {}
 
 @onready var _press_overlay: Node2D = get_node_or_null("PressOverlay")
 @onready var _sfx_press: AudioStreamPlayer = get_node_or_null("SfxPress")
@@ -91,6 +92,10 @@ func _ready() -> void:
 	_fall_interval = fall_interval_start
 
 	_create_ui_and_background()
+
+	var pm = get_node_or_null("PowerUpManager")
+	if pm != null:
+		pm.cooldown_changed.connect(_on_powerup_cooldown_changed)
 
 	if grid == null:
 		if has_node("Grid"):
@@ -117,6 +122,19 @@ func _process(p_delta: float) -> void:
 		_shield_time_left = max(0.0, _shield_time_left - p_delta)
 		if _shield_overlay != null:
 			_shield_overlay.visible = _shield_time_left > 0.0
+		var shield_lbl = _powerup_labels.get(4) as Label
+		if shield_lbl != null:
+			if _shield_time_left > 0.0:
+				shield_lbl.text = "AKTIV (%.1fs)" % _shield_time_left
+				shield_lbl.add_theme_color_override("font_color", Color("#00E1FF"))
+			else:
+				var pm = get_node_or_null("PowerUpManager")
+				if pm != null and pm.cooldowns[4] > 0.0:
+					shield_lbl.text = "Abklingzeit: %.1fs" % pm.cooldowns[4]
+					shield_lbl.add_theme_color_override("font_color", Color("#FF8800"))
+				else:
+					shield_lbl.text = "BEREIT"
+					shield_lbl.add_theme_color_override("font_color", Color.GREEN)
 
 	if SettingsManager.current_mode == SettingsManager.GameMode.EXPO and not _game_over:
 		_time_left = max(0.0, _time_left - p_delta)
@@ -601,6 +619,142 @@ func _create_ui_and_background() -> void:
 	_level_up_name.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	vbox.add_child(_level_up_name)
 
+	# Power-Ups Side Panel (Rechts)
+	var side_panel = PanelContainer.new()
+	side_panel.name = "PowerUpPanel"
+	side_panel.anchor_left = 0.68
+	side_panel.anchor_right = 0.96
+	side_panel.anchor_top = 0.15
+	side_panel.anchor_bottom = 0.88
+
+	var side_style = StyleBoxFlat.new()
+	side_style.bg_color = Color(0.08, 0.08, 0.1, 0.8)
+	side_style.border_width_left = 3
+	side_style.border_width_top = 3
+	side_style.border_width_right = 3
+	side_style.border_width_bottom = 3
+	side_style.border_color = Color("#FFD000")  # VDE Gelb
+	side_style.corner_radius_top_left = 12
+	side_style.corner_radius_top_right = 12
+	side_style.corner_radius_bottom_left = 12
+	side_style.corner_radius_bottom_right = 12
+	side_style.content_margin_left = 15
+	side_style.content_margin_right = 15
+	side_style.content_margin_top = 15
+	side_style.content_margin_bottom = 15
+	side_panel.add_theme_stylebox_override("panel", side_style)
+	ui_layer.add_child(side_panel)
+
+	var side_vbox = VBoxContainer.new()
+	side_vbox.add_theme_constant_override("separation", 12)
+	side_panel.add_child(side_vbox)
+
+	var side_title = Label.new()
+	side_title.text = "WERKZEUGE (POWER-UPS)"
+	side_title.add_theme_font_size_override("font_size", 18)
+	side_title.add_theme_color_override("font_color", Color("#FFD000"))
+	side_title.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	side_vbox.add_child(side_title)
+
+	var side_desc = Label.new()
+	side_desc.text = "Nutze Tasten [1-4] oder Gamepad zum Auslösen."
+	side_desc.add_theme_font_size_override("font_size", 11)
+	side_desc.add_theme_color_override("font_color", Color.GRAY)
+	side_desc.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	side_vbox.add_child(side_desc)
+
+	var powerup_info = [
+		{
+			"id": 1,
+			"name": "AMX-Laser",
+			"key": "Taste 1 / X",
+			"desc": "Entfernt Isolierung (rot 'is' -> grau 'Blank')."
+		},
+		{
+			"id": 2,
+			"name": "Slick-Cutter",
+			"key": "Taste 2 / Y",
+			"desc": "Schneidet unterste ungültige Reihe ab."
+		},
+		{
+			"id": 3,
+			"name": "STILO60-Beben",
+			"key": "Taste 3 / B",
+			"desc": "Löscht 3 Reihen & schüttelt das Gitter."
+		},
+		{
+			"id": 4,
+			"name": "VDE-Schutzschild",
+			"key": "Taste 4 / Start",
+			"desc": "Schützt 20s vor Game Over (Kabel berühren)."
+		}
+	]
+
+	for item in powerup_info:
+		var p_box = PanelContainer.new()
+		var p_style = StyleBoxFlat.new()
+		p_style.bg_color = Color(0.12, 0.12, 0.15, 0.9)
+		p_style.corner_radius_top_left = 8
+		p_style.corner_radius_top_right = 8
+		p_style.corner_radius_bottom_left = 8
+		p_style.corner_radius_bottom_right = 8
+		p_style.content_margin_left = 10
+		p_style.content_margin_right = 10
+		p_style.content_margin_top = 8
+		p_style.content_margin_bottom = 8
+		p_box.add_theme_stylebox_override("panel", p_style)
+		side_vbox.add_child(p_box)
+
+		var p_vbox = VBoxContainer.new()
+		p_vbox.add_theme_constant_override("separation", 2)
+		p_box.add_child(p_vbox)
+
+		# Name and key
+		var name_hbox = HBoxContainer.new()
+		p_vbox.add_child(name_hbox)
+
+		var name_lbl = Label.new()
+		name_lbl.text = item["name"]
+		name_lbl.add_theme_font_size_override("font_size", 14)
+		name_lbl.add_theme_color_override("font_color", Color("#E30613"))  # Intercable Rot
+		name_hbox.add_child(name_lbl)
+
+		var spacer = Control.new()
+		spacer.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+		name_hbox.add_child(spacer)
+
+		var key_lbl = Label.new()
+		key_lbl.text = item["key"]
+		key_lbl.add_theme_font_size_override("font_size", 10)
+		key_lbl.add_theme_color_override("font_color", Color.YELLOW)
+		name_hbox.add_child(key_lbl)
+
+		# Description
+		var desc_lbl = Label.new()
+		desc_lbl.text = item["desc"]
+		desc_lbl.add_theme_font_size_override("font_size", 11)
+		desc_lbl.autowrap_mode = TextServer.AUTOWRAP_WORD
+		desc_lbl.add_theme_color_override("font_color", Color.LIGHT_GRAY)
+		p_vbox.add_child(desc_lbl)
+
+		# Status
+		var status_hbox = HBoxContainer.new()
+		p_vbox.add_child(status_hbox)
+
+		var status_title = Label.new()
+		status_title.text = "Status: "
+		status_title.add_theme_font_size_override("font_size", 11)
+		status_title.add_theme_color_override("font_color", Color.GRAY)
+		status_hbox.add_child(status_title)
+
+		var status_lbl = Label.new()
+		status_lbl.text = "BEREIT"
+		status_lbl.add_theme_font_size_override("font_size", 11)
+		status_lbl.add_theme_color_override("font_color", Color.GREEN)
+		status_hbox.add_child(status_lbl)
+
+		_powerup_labels[item["id"]] = status_lbl
+
 
 func _update_background_colors() -> void:
 	if _bg_rect == null or _bg_rect.texture == null:
@@ -803,3 +957,19 @@ func _trigger_rumble(p_weak: float, p_strong: float, p_duration: float) -> void:
 	var joypads = Input.get_connected_joypads()
 	if joypads.size() > 0:
 		Input.start_joy_vibration(joypads[0], p_weak, p_strong, p_duration)
+
+
+func _on_powerup_cooldown_changed(p_id: int, p_time_left: float) -> void:
+	var label = _powerup_labels.get(p_id) as Label
+	if label == null:
+		return
+
+	if p_id == 4 and _shield_time_left > 0.0:
+		label.text = "AKTIV (%.1fs)" % _shield_time_left
+		label.add_theme_color_override("font_color", Color("#00E1FF"))
+	elif p_time_left > 0.0:
+		label.text = "Abklingzeit: %.1fs" % p_time_left
+		label.add_theme_color_override("font_color", Color("#FF8800"))
+	else:
+		label.text = "BEREIT"
+		label.add_theme_color_override("font_color", Color.GREEN)
