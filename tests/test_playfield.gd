@@ -411,3 +411,32 @@ func test_game_over_overlay_initialization() -> void:
 
 	# Since queue_free is called, let's wait a frame or check that it's queued for deletion
 	assert_true(overlay.is_queued_for_deletion())
+
+
+func test_level_progression_signal_and_background_change() -> void:
+	var playfield = PlayfieldClass.new()
+	add_child(playfield)
+
+	watch_signals(playfield)
+
+	# Initial level theme is Level 1 "Werkstatt"
+	assert_eq(playfield._level, 1)
+	var theme1 = playfield.LEVEL_THEMES[1]
+	var bg_gradient = playfield._bg_rect.texture.gradient
+	assert_eq(bg_gradient.get_color(0), theme1["color_start"])
+
+	# Trigger level up to level 2 by clearing 10 rows
+	playfield._add_score(10)
+
+	assert_eq(playfield._level, 2)
+	assert_signal_emitted_with_parameters(playfield, "level_up", [2, "Baustelle"])
+
+	# Let's check that update_difficulty adjusted fall interval to 0.9s
+	assert_eq(playfield._fall_interval, 0.9)
+
+	# We can't immediately assert the color matches theme2 start color because of the tween,
+	# but we can verify immediate state by checking LEVEL_THEMES lookup.
+	var theme2 = playfield.LEVEL_THEMES[2]
+	assert_eq(theme2["name"], "Baustelle")
+
+	playfield.free()
