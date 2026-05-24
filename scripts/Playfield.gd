@@ -755,6 +755,7 @@ func _show_loading_screen() -> void:
 	vbox.add_child(spinner)
 
 	var spin_tween = create_tween().set_loops()
+	spin_tween.bind_node(spinner)
 	spin_tween.tween_property(spinner, "modulate:a", 0.3, 0.4)
 	spin_tween.tween_property(spinner, "modulate:a", 1.0, 0.4)
 
@@ -778,6 +779,8 @@ func _show_loading_screen() -> void:
 	fade_tween.tween_property(bg, "modulate:a", 0.0, 0.5)
 	fade_tween.tween_callback(
 		func():
+			if spin_tween.is_valid():
+				spin_tween.kill()
 			_is_animating_press = false
 			loading_layer.queue_free()
 	)
