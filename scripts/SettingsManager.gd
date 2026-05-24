@@ -13,6 +13,13 @@ var is_sound_enabled: bool = true
 
 func _ready() -> void:
 	load_settings()
+	apply_kiosk_settings()
+
+
+func _notification(what: int) -> void:
+	if what == NOTIFICATION_APPLICATION_FOCUS_OUT:
+		if is_kiosk_mode and not _is_running_in_test():
+			_handle_focus_loss()
 
 
 func save_settings() -> void:
@@ -32,3 +39,25 @@ func load_settings() -> void:
 		expo_round_duration = config.get_value("general", "expo_round_duration", 180.0) as float
 		is_kiosk_mode = config.get_value("general", "is_kiosk_mode", false) as bool
 		is_sound_enabled = config.get_value("general", "is_sound_enabled", true) as bool
+
+	# CLI argument check to override kiosk mode
+	for arg in OS.get_cmdline_args():
+		if arg == "--kiosk":
+			is_kiosk_mode = true
+
+
+func apply_kiosk_settings() -> void:
+	if is_kiosk_mode and not _is_running_in_test():
+		DisplayServer.window_set_mode(DisplayServer.WINDOW_MODE_FULLSCREEN)
+		DisplayServer.window_set_flag(DisplayServer.WINDOW_FLAG_ALWAYS_ON_TOP, true)
+
+
+func _handle_focus_loss() -> void:
+	get_window().grab_focus()
+
+
+func _is_running_in_test() -> bool:
+	for arg in OS.get_cmdline_args():
+		if "gut" in arg:
+			return true
+	return false

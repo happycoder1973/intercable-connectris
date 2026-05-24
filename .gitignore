@@ -1,7 +1,8 @@
 # Godot-specific ignores
 .godot/
 Godot_Engine/
-build/
+build/*
+!build/*.ps1
 *.zip
 *.log
 *.import
