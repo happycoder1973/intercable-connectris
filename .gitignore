@@ -3,6 +3,7 @@
 Godot_Engine/
 build/*
 !build/*.ps1
+!build/*.md
 *.zip
 *.log
 *.import
