@@ -62,6 +62,7 @@ var _touch_start_pos: Vector2 = Vector2.ZERO
 var _touch_start_time: int = 0
 var _last_joy_axis_x: float = 0.0
 var _last_joy_axis_y: float = 0.0
+var _highscore_db: HighscoreDB
 
 # Programmatische UI-Referenzen
 var _bg_rect: TextureRect
@@ -86,6 +87,7 @@ func _ready() -> void:
 	_level = 1
 	_total_rows_cleared = 0
 	_game_over = false
+	_highscore_db = HighscoreDB.new()
 	_fall_interval = fall_interval_start
 
 	_create_ui_and_background()
@@ -453,7 +455,20 @@ func _trigger_game_over(p_was_time_out: bool) -> void:
 
 
 func _on_name_input_requested() -> void:
-	print("Name input requested")
+	var keyboard = KeyboardOverlay.new()
+	keyboard.name = "KeyboardOverlay"
+	var ui_layer = get_node_or_null("UILayer")
+	if ui_layer != null:
+		ui_layer.add_child(keyboard)
+	else:
+		add_child(keyboard)
+	keyboard.initials_entered.connect(_on_initials_entered)
+
+
+func _on_initials_entered(p_initials: String) -> void:
+	if _highscore_db != null:
+		_highscore_db.add_highscore(p_initials, _score, _level)
+	get_tree().change_scene_to_file("res://scenes/main_menu.tscn")
 
 
 func _create_ui_and_background() -> void:

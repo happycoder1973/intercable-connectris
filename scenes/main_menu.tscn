@@ -1,0 +1,105 @@
+[gd_scene load_steps=2 format=3]
+
+[ext_resource type="Script" path="res://scripts/MainMenu.gd" id="1_main_menu"]
+
+[node name="MainMenu" type="Control"]
+layout_mode = 3
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+script = ExtResource("1_main_menu")
+
+[node name="Background" type="ColorRect" parent="."]
+layout_mode = 1
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+color = Color(0.08, 0.08, 0.1, 1)
+
+[node name="HBox" type="HBoxContainer" parent="."]
+layout_mode = 1
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+offset_left = 50.0
+offset_top = 50.0
+offset_right = -50.0
+offset_bottom = -50.0
+grow_horizontal = 2
+grow_vertical = 2
+alignment = 1
+
+[node name="LeftPanel" type="PanelContainer" parent="HBox"]
+custom_minimum_size = Vector2(400, 0)
+layout_mode = 2
+size_flags_horizontal = 3
+
+[node name="VBox" type="VBoxContainer" parent="HBox/LeftPanel"]
+layout_mode = 2
+theme_override_constants/separation = 20
+alignment = 1
+
+[node name="Title" type="Label" parent="HBox/LeftPanel/VBox"]
+layout_mode = 2
+theme_override_colors/font_color = Color(0.89, 0.02, 0.07, 1)
+theme_override_font_sizes/font_size = 32
+text = "CONNECTRIS"
+horizontal_alignment = 1
+
+[node name="Subtitle" type="Label" parent="HBox/LeftPanel/VBox"]
+layout_mode = 2
+theme_override_colors/font_color = Color(1, 0.82, 0, 1)
+theme_override_font_sizes/font_size = 18
+text = "INTERCABLE"
+horizontal_alignment = 1
+
+[node name="Spacer" type="Control" parent="HBox/LeftPanel/VBox"]
+custom_minimum_size = Vector2(0, 30)
+layout_mode = 2
+
+[node name="ClassicButton" type="Button" parent="HBox/LeftPanel/VBox"]
+custom_minimum_size = Vector2(250, 60)
+layout_mode = 2
+size_flags_horizontal = 4
+theme_override_font_sizes/font_size = 20
+text = "Klassisch"
+
+[node name="ExpoButton" type="Button" parent="HBox/LeftPanel/VBox"]
+custom_minimum_size = Vector2(250, 60)
+layout_mode = 2
+size_flags_horizontal = 4
+theme_override_font_sizes/font_size = 20
+text = "Messe-Modus (EXPO)"
+
+[node name="QuitButton" type="Button" parent="HBox/LeftPanel/VBox"]
+custom_minimum_size = Vector2(250, 60)
+layout_mode = 2
+size_flags_horizontal = 4
+theme_override_font_sizes/font_size = 20
+text = "Beenden"
+
+[node name="RightPanel" type="PanelContainer" parent="HBox"]
+custom_minimum_size = Vector2(600, 0)
+layout_mode = 2
+size_flags_horizontal = 3
+
+[node name="VBox" type="VBoxContainer" parent="HBox/RightPanel"]
+layout_mode = 2
+theme_override_constants/separation = 20
+alignment = 1
+
+[node name="Title" type="Label" parent="HBox/RightPanel/VBox"]
+layout_mode = 2
+theme_override_colors/font_color = Color(1, 0.82, 0, 1)
+theme_override_font_sizes/font_size = 24
+text = "TOP 10 BESTENLISTE"
+horizontal_alignment = 1
+
+[node name="HighscoreList" type="VBoxContainer" parent="HBox/RightPanel/VBox"]
+layout_mode = 2
+theme_override_constants/separation = 10
+alignment = 1
