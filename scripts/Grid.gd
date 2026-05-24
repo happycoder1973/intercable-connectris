@@ -123,6 +123,42 @@ func check_and_clear_rows() -> int:
 	return cleared
 
 
+func is_row_crimp_valid(p_row_index: int) -> bool:
+	for c in range(COLUMNS):
+		if grid_data[p_row_index][c] == null:
+			return false
+
+	if grid_data[p_row_index][0].type != Segment.Type.CRIMP_LUG:
+		return false
+	if grid_data[p_row_index][COLUMNS - 1].type != Segment.Type.CRIMP_LUG:
+		return false
+
+	for c in range(1, COLUMNS - 1):
+		if grid_data[p_row_index][c].type != Segment.Type.BARE:
+			return false
+
+	return true
+
+
+func check_full_rows_status() -> Dictionary:
+	var valid_rows: Array[int] = []
+	var invalid_rows: Array[int] = []
+
+	for r in range(ROWS):
+		var is_full: bool = true
+		for c in range(COLUMNS):
+			if grid_data[r][c] == null:
+				is_full = false
+				break
+		if is_full:
+			if is_row_crimp_valid(r):
+				valid_rows.append(r)
+			else:
+				invalid_rows.append(r)
+
+	return {"valid": valid_rows, "invalid": invalid_rows}
+
+
 func clear_row(p_row_index: int) -> void:
 	if p_row_index >= 0 and p_row_index < ROWS:
 		grid_data.remove_at(p_row_index)
